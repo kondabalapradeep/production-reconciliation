@@ -143,7 +143,7 @@ details.method li{margin:6px 0 0 18px;}
   <summary>Method &amp; rules baked into this dashboard</summary>
   <ul>
     <li><b>Finished goods:</b> floor-reported <i>quantity produced</i> (all 5 category blocks per daily tab) vs Sage production entries (JR work-ticket receipts + BR BOM receipts). Gap After Adjustments adds net IA + IZ on the item — where a posting error was trued up by adjustment, the gap closes.</li>
-    <li><b>Raw materials:</b> theoretical = floor production × BOM (multi-level explosion, <i>no scrap %</i>, material lines only); a Sage-driven theoretical is shown alongside. Actual = JI + BI issues. Negative adjustments count as unposted consumption.</li>
+    <li><b>Raw materials:</b> theoretical = floor production × BOM (multi-level explosion, <i>no scrap %</i>, material lines only); Actual = JI + BI issues. Deviation = Actual − Theoretical (Floor×BOM). Adjustments are applied to finished goods only.</li>
     <li><b>Comparison window</b> = overlap of the production dates and the transaction dates, computed automatically from the files.</li>
     <li><b>Excluded item lines:</b> D line, Plantation, Worth St (not item codes).</li>
     <li><b>Known UOM items</b> (A13, AA11, AX11) are flagged, not judged.</li>
@@ -276,30 +276,27 @@ function compute(){
   RM=[];
   const comps=new Set([...thF.keys(),...thS.keys(),...cons.keys()]);
   for(const c of [...comps].sort()){
-    const ef=thF.get(c)||0, es=thS.get(c)||0, a=cons.get(c)||0, ad=adj.get(c)||0;
-    if(Math.max(Math.abs(ef),Math.abs(es),Math.abs(a),Math.abs(ad))<1e-6) continue;
+    const ef=thF.get(c)||0, es=thS.get(c)||0, a=cons.get(c)||0;
+    if(Math.max(Math.abs(ef),Math.abs(es),Math.abs(a))<1e-6) continue;
     const base=ef>0?ef:es;
-    const dev=a-base, devAfter=(a-ad)-base;
-    let status,cm,pct=base?devAfter/base:null;
+    const dev=a-base;
+    let status,cm,pct=base?dev/base:null;
     if(base===0){ status='NO BOM DEMAND'; cm='Consumed with no BOM demand from any produced item — check BOM completeness or mis-issue.'; }
-    else if(a===0&&ad===0){ status='NOT CONSUMED'; cm='BOM demand but zero consumption or adjustment recorded — backflush level or non-inventory item.'; }
+    else if(a===0){ status='NOT CONSUMED'; cm='BOM demand but zero consumption recorded — backflush level or non-inventory item.'; }
     else if(base>1e6 && dev/base<-0.6){ status='UOM ARTIFACT'; cm='Extreme shortfall tracing to the A13/AA11/AX11 unit-of-measure issue — not a real variance.'; pct=null; }
     else{
-      const p0=dev/base, p1=devAfter/base;
-      if(Math.abs(p1)<=0.05&&Math.abs(p0)>0.05){ status='ADJ CLOSED'; cm='Deviation '+fmtP(p0)+' before adjustments, '+fmtP(p1)+' after — consumption trued up via IA/IZ.'; }
-      else if(Math.abs(p1)<=0.05){ status='IN LINE'; cm='Consumption in line with BOM (within 5%).'; }
-      else if(Math.abs(p1)<Math.abs(p0)*0.65){ status='ADJ PARTIAL'; cm='Adjustments partially close the gap ('+fmtP(p0)+' → '+fmtP(p1)+').'; }
-      else if(p1>0.15){ status='OVER'; cm='Over-consumed '+fmtP(p1)+' vs BOM even after adjustments — waste/spillage or BOM understated.'; }
-      else if(p1<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(p1)+' vs BOM even after adjustments — unposted issues or BOM overstated.'; }
-      else { status='MODERATE'; cm='Moderate deviation ('+fmtP(p1)+' after adjustments).'; }
+      if(Math.abs(pct)<=0.05){ status='IN LINE'; cm='Consumption in line with BOM (within 5%).'; }
+      else if(pct>0.15){ status='OVER'; cm='Over-consumed '+fmtP(pct)+' vs BOM — waste/spillage or BOM understated.'; }
+      else if(pct<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(pct)+' vs BOM — unposted issues or BOM overstated.'; }
+      else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
     }
-    RM.push({comp:c, desc:desc.get(c)||'', thF:ef, thS:es, act:a, dev, adj:ad, devAfter, pct, status, cm});
+    RM.push({comp:c, thF:ef, thS:es, act:a, dev, pct, status, cm});
   }
   render();
 }
 
 const FG_ORDER={'OPEN GAP':0,'MISSING':1,'ADJ PARTIAL':2,'ADJ CLOSED':3,'UOM':4,'MATCH':5};
-const RM_ORDER={'OVER':0,'UNDER':1,'ADJ PARTIAL':2,'ADJ CLOSED':3,'NO BOM DEMAND':4,'NOT CONSUMED':5,'UOM ARTIFACT':6,'MODERATE':7,'IN LINE':8};
+const RM_ORDER={'OVER':0,'UNDER':1,'NO BOM DEMAND':2,'NOT CONSUMED':3,'UOM ARTIFACT':4,'MODERATE':5,'IN LINE':6};
 function pill(s){
   const map={'MATCH':'p-ok','IN LINE':'p-ok','ADJ CLOSED':'p-info','ADJ PARTIAL':'p-warn','MODERATE':'p-warn','UOM':'p-warn','UOM ARTIFACT':'p-warn','NOT CONSUMED':'p-warn','NO BOM DEMAND':'p-warn','OPEN GAP':'p-bad','MISSING':'p-bad','OVER':'p-bad','UNDER':'p-bad'};
   return '<span class="pill '+(map[s]||'p-info')+'">'+s+'</span>';
@@ -324,13 +321,13 @@ function render(){
   const match=FG.filter(r=>r.status==='MATCH').length, adjc=FG.filter(r=>r.status==='ADJ CLOSED').length;
   const open=FG.filter(r=>r.status==='OPEN GAP'||r.status==='MISSING').length;
   const netAfter=FG.filter(r=>!UOM.has(r.item)).reduce((s,r)=>s+r.after,0);
-  const rmInline=RM.filter(r=>r.status==='IN LINE'||r.status==='ADJ CLOSED').length;
+  const rmInline=RM.filter(r=>r.status==='IN LINE').length;
   const rmBad=RM.filter(r=>r.status==='OVER'||r.status==='UNDER').length;
   document.getElementById('kpis').innerHTML=
     kpi((100*(match+adjc)/FG.length).toFixed(0)+'%','FG items matched or adjustment-closed', match+adjc>=FG.length*0.7?'good':'warn')+
     kpi(fmtS(netAfter),'FG net gap after adjustments (cases)', Math.abs(netAfter)<50000?'good':'warn')+
     kpi(open,'FG items with open gaps', open===0?'good':'bad')+
-    kpi(rmInline+' / '+RM.length,'Raw materials in line or adj-closed','good')+
+    kpi(rmInline+' / '+RM.length,'Raw materials in line with BOM','good')+
     kpi(rmBad,'Raw materials over / under-consumed', rmBad===0?'good':'bad');
   function kpi(v,l,c){ return '<div class="kpi '+c+'"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
 
@@ -364,12 +361,12 @@ function drawFG(){
 function drawRM(){
   const q=document.getElementById('rmSearch').value.toLowerCase();
   const s=document.getElementById('rmStatus').value;
-  let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!s||r.status===s));
-  rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.devAfter)-Math.abs(x.devAfter));
-  const cols=[['comp','Component'],['desc','Description'],['thF','Theoretical (Floor×BOM)'],['thS','Theoretical (Sage×BOM)'],['act','Actual (JI+BI)'],['dev','Deviation'],['adj','Adjust­ments'],['devAfter','Dev After Adj'],['pct','% After'],['status','Status'],['cm','Comment']];
+  let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q))&&(!s||r.status===s));
+  rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.dev)-Math.abs(x.dev));
+  const cols=[['comp','Component'],['thF','Theoretical (Floor×BOM)'],['act','Actual (JI+BI)'],['dev','Deviation'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
   document.getElementById('rmTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td>'+r.desc+'</td><td class="num">'+fmt(r.thF)+'</td><td class="num">'+fmt(r.thS)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtS(r.dev)+'</td><td class="num">'+fmtS(r.adj)+'</td><td class="num"><b>'+fmtS(r.devAfter)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="num">'+fmt(r.thF)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
   document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
 }
 function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
@@ -403,9 +400,7 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
     ['RAW MATERIALS SUMMARY'],
     ['Total components', RM.length],
     ['In line with BOM (within 5%)', rcnt('IN LINE')],
-    ['Closed by adjustments', rcnt('ADJ CLOSED')],
-    ['Partially closed', rcnt('ADJ PARTIAL')],
-    ['Moderate deviation', rcnt('MODERATE')],
+    ['Moderate deviation (5-15%)', rcnt('MODERATE')],
     ['Over-consumed >15%', rcnt('OVER')],
     ['Under-consumed >15%', rcnt('UNDER')],
     ['Consumed with no BOM demand', rcnt('NO BOM DEMAND')],
@@ -414,17 +409,17 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
     [],
     ['METHOD'],
     ['Finished goods: floor-reported qty produced vs Sage JR+BR; adjustments = net IA+IZ; Gap After Adj = Gap + Adjustments.'],
-    ['Raw materials: theoretical = floor production x BOM (multi-level, no scrap, material lines only); actual = JI+BI; negative adjustments count as unposted consumption.'],
+    ['Raw materials: theoretical = floor production x BOM (multi-level, no scrap, material lines only); actual = JI+BI. Adjustments intentionally not applied to raw materials.'],
     ['Excluded lines: D line, Plantation, Worth St. UOM items A13/AA11/AX11 flagged, not judged.'],
   ];
   const fgSheet=[['Item','Category','Floor Produced','Sage (JR+BR)','Gap','Adjustments','Gap After Adj','% After','Status','Comment'],
     ...FG.map(r=>[r.item,r.cat,r.floor,r.sage,r.gap,r.adj,r.after,r.pct,r.status,r.cm])];
-  const rmSheet=[['Component','Description','Theoretical (Floor x BOM)','Theoretical (Sage x BOM)','Actual (JI+BI)','Deviation','Adjustments','Dev After Adj','% After','Status','Comment'],
-    ...RM.map(r=>[r.comp,r.desc,r.thF,r.thS,r.act,r.dev,r.adj,r.devAfter,r.pct,r.status,r.cm])];
+  const rmSheet=[['Component','Theoretical (Floor x BOM)','Actual (JI+BI)','Deviation','Deviation %','Status','Comment'],
+    ...RM.map(r=>[r.comp,r.thF,r.act,r.dev,r.pct,r.status,r.cm])];
   const wb=XLSX.utils.book_new();
   const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:52},{wch:14}];
   const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,16,14,14,12,12,14,9,14,70].map(w=>({wch:w}));
-  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,28,20,20,14,12,12,14,9,14,70].map(w=>({wch:w}));
+  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,20,14,12,11,14,70].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s1,'Summary');
   XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
   XLSX.utils.book_append_sheet(wb,s3,'Raw Materials');
