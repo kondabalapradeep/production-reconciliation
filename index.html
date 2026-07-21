@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production ⇄ Sage 100 Reconciliation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#16233a; --navy:#1F4E78; --steel:#5b708c; --line:#d8dfe8;
+  --paper:#f6f8fa; --card:#ffffff;
+  --ok:#1b7f4d; --ok-bg:#e6f4ec; --warn:#a86400; --warn-bg:#fdf1dc; --bad:#b3261e; --bad-bg:#fbe9e7;
+  --info:#3a5f8a; --info-bg:#e8f0f9;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:"Segoe UI", -apple-system, Roboto, Arial, sans-serif; background:var(--paper); color:var(--ink); font-size:14px;}
+.wrap{max-width:1280px; margin:0 auto; padding:20px 24px 60px;}
+header{border-bottom:3px solid var(--navy); padding:14px 0 12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:8px;}
+header h1{font-size:20px; font-weight:700; letter-spacing:.2px; color:var(--navy);}
+header .sub{color:var(--steel); font-size:12.5px;}
+#windowTag{font-size:12.5px; color:var(--navy); font-weight:600; background:var(--info-bg); padding:4px 10px; border-radius:4px; display:none;}
+.uploads{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:14px;}
+.ucard{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px;}
+.ucard h3{font-size:13px; color:var(--navy); margin-bottom:2px;}
+.ucard p{font-size:12px; color:var(--steel); margin-bottom:8px;}
+.ucard input[type=file]{width:100%; font-size:12px;}
+.ustat{margin-top:8px; font-size:12px; color:var(--steel); min-height:16px;}
+.ustat.ok{color:var(--ok); font-weight:600;}
+.ustat.err{color:var(--bad); font-weight:600;}
+.runbar{display:flex; gap:12px; align-items:center; margin-bottom:20px; flex-wrap:wrap;}
+button.run{background:var(--navy); color:#fff; border:none; border-radius:6px; padding:10px 22px; font-size:14px; font-weight:600; cursor:pointer;}
+button.run:disabled{background:#9fb2c6; cursor:not-allowed;}
+button.ghost{background:#fff; color:var(--navy); border:1px solid var(--navy); border-radius:6px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer;}
+#runmsg{font-size:12.5px; color:var(--steel);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:8px;}
+.kpi{background:var(--card); border:1px solid var(--line); border-left:5px solid var(--navy); border-radius:6px; padding:12px 14px;}
+.kpi .v{font-size:24px; font-weight:700; font-variant-numeric:tabular-nums;}
+.kpi .l{font-size:11.5px; color:var(--steel); text-transform:uppercase; letter-spacing:.5px; margin-top:2px;}
+.kpi.good{border-left-color:var(--ok);} .kpi.warn{border-left-color:var(--warn);} .kpi.bad{border-left-color:var(--bad);}
+.gauge{height:14px; border-radius:7px; overflow:hidden; display:flex; margin:14px 0 4px; border:1px solid var(--line); background:#fff;}
+.gauge div{height:100%;}
+.gauge-legend{display:flex; gap:16px; font-size:11.5px; color:var(--steel); margin-bottom:18px; flex-wrap:wrap;}
+.dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px;}
+.tabs{display:flex; gap:0; border-bottom:2px solid var(--line); margin-bottom:0;}
+.tab{padding:9px 20px; font-size:13.5px; font-weight:600; color:var(--steel); cursor:pointer; border:none; background:none; border-bottom:3px solid transparent; margin-bottom:-2px;}
+.tab.active{color:var(--navy); border-bottom-color:var(--navy);}
+.panel{display:none; background:var(--card); border:1px solid var(--line); border-top:none; border-radius:0 0 8px 8px; padding:14px;}
+.panel.active{display:block;}
+.filters{display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; align-items:center;}
+.filters input, .filters select{padding:6px 9px; border:1px solid var(--line); border-radius:5px; font-size:12.5px;}
+.filters input{width:200px;}
+.tblwrap{overflow:auto; max-height:560px; border:1px solid var(--line); border-radius:6px;}
+table{border-collapse:collapse; width:100%; font-size:12.5px;}
+th{background:var(--navy); color:#fff; text-align:left; padding:8px 10px; position:sticky; top:0; cursor:pointer; white-space:nowrap; font-size:12px;}
+th .arrow{font-size:9px; margin-left:3px;}
+td{padding:6px 10px; border-bottom:1px solid #eef1f5; white-space:nowrap; font-variant-numeric:tabular-nums;}
+td.num{text-align:right;}
+td.cmt{white-space:normal; min-width:280px; max-width:460px; color:#37475d; font-size:12px;}
+tr:hover td{background:#f2f6fa;}
+.pill{display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;}
+.p-ok{background:var(--ok-bg); color:var(--ok);} .p-warn{background:var(--warn-bg); color:var(--warn);}
+.p-bad{background:var(--bad-bg); color:var(--bad);} .p-info{background:var(--info-bg); color:var(--info);}
+details.method{margin:18px 0 0; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 16px; font-size:12.5px; color:#37475d;}
+details.method summary{font-weight:700; color:var(--navy); cursor:pointer; font-size:13px;}
+details.method li{margin:6px 0 0 18px;}
+#results{display:none;}
+.count{font-size:12px; color:var(--steel); margin-left:auto;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Production ⇄ Sage 100 Reconciliation</h1>
+    <div class="sub">Upload the weekly production report(s), the Sage item transaction extract, and the BOM — everything runs in your browser.</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:15px;font-weight:800;letter-spacing:1.2px;color:var(--navy)">ALAMANCE FOODS, INC.</div>
+    <div style="font-size:11px;color:var(--steel)">Prepared by Bala Pradeep Konda</div>
+    <span id="windowTag" style="margin-top:4px"></span>
+  </div>
+</header>
+
+<div class="uploads">
+  <div class="ucard">
+    <h3>1 · Daily Production Reports (.xlsm)</h3>
+    <p>One or more weekly workbooks (Monday–Sunday tabs)</p>
+    <input type="file" id="fProd" accept=".xlsm,.xlsx" multiple>
+    <div class="ustat" id="sProd">No files loaded</div>
+  </div>
+  <div class="ucard">
+    <h3>2 · Sage Item Transactions (.xlsx)</h3>
+    <p>Item Transaction History export (all codes)</p>
+    <input type="file" id="fTxn" accept=".xlsx,.xlsm">
+    <div class="ustat" id="sTxn">No file loaded</div>
+  </div>
+  <div class="ucard">
+    <h3>3 · Bill of Materials (.xlsx)</h3>
+    <p>BM_BillDetail export</p>
+    <input type="file" id="fBom" accept=".xlsx,.xlsm">
+    <div class="ustat" id="sBom">No file loaded</div>
+  </div>
+</div>
+
+<div class="runbar">
+  <button class="run" id="btnRun" disabled>Run reconciliation</button>
+  <button class="ghost" id="btnClear">Clear files &amp; start over</button>
+  <button class="ghost" id="btnXlsx" style="display:none">Download full report (Excel)</button>
+  <span id="runmsg"></span>
+</div>
+
+<div id="results">
+  <div class="kpis" id="kpis"></div>
+  <div class="gauge" id="gauge"></div>
+  <div class="gauge-legend" id="gaugeLegend"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-panel="pFG">Finished Goods</button>
+    <button class="tab" data-panel="pRM">Raw Materials</button>
+  </div>
+
+  <div class="panel active" id="pFG">
+    <div class="filters">
+      <input type="text" id="fgSearch" placeholder="Search item…">
+      <select id="fgCat"><option value="">All categories</option></select>
+      <select id="fgStatus"><option value="">All statuses</option></select>
+      <span class="count" id="fgCount"></span>
+    </div>
+    <div class="tblwrap"><table id="fgTable"></table></div>
+  </div>
+
+  <div class="panel" id="pRM">
+    <div class="filters">
+      <input type="text" id="rmSearch" placeholder="Search component…">
+      <select id="rmStatus"><option value="">All statuses</option></select>
+      <span class="count" id="rmCount"></span>
+    </div>
+    <div class="tblwrap"><table id="rmTable"></table></div>
+  </div>
+</div>
+
+<details class="method">
+  <summary>Method &amp; rules baked into this dashboard</summary>
+  <ul>
+    <li><b>Finished goods:</b> floor-reported <i>quantity produced</i> (all 5 category blocks per daily tab) vs Sage production entries (JR work-ticket receipts + BR BOM receipts). Gap After Adjustments adds net IA + IZ on the item — where a posting error was trued up by adjustment, the gap closes.</li>
+    <li><b>Raw materials:</b> theoretical = floor production × BOM (multi-level explosion, <i>no scrap %</i>, material lines only); a Sage-driven theoretical is shown alongside. Actual = JI + BI issues. Negative adjustments count as unposted consumption.</li>
+    <li><b>Comparison window</b> = overlap of the production dates and the transaction dates, computed automatically from the files.</li>
+    <li><b>Excluded item lines:</b> D line, Plantation, Worth St (not item codes).</li>
+    <li><b>Known UOM items</b> (A13, AA11, AX11) are flagged, not judged.</li>
+    <li>Nothing uploads to any server — files are read locally in the browser.</li>
+  </ul>
+</details>
+</div>
+
+<script>
+const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const BLOCKS=[['Aerosol','B','C'],['Pops','I','J'],['Rainbow / Drinks','O','Q'],['Gallon (1 Gal)','X','Z'],['2.5 Gallon','AG','AI']];
+const EXCLUDE=new Set(['D line','Plantation','Worth St']);
+const UOM=new Set(['A13','AA11','AX11']);
+let prodRows=null, txnRows=null, bomRows=null, FG=[], RM=[];
+
+function serialToDate(v){ if(v instanceof Date) return v; if(typeof v==='number'&&v>20000&&v<80000){return new Date(Date.UTC(1899,11,30)+v*86400000);} const d=new Date(v); return isNaN(d)?null:d; }
+function dstr(d){ return d.toISOString().slice(0,10); }
+function fmt(n){ return n==null?'':Math.round(n).toLocaleString('en-US'); }
+function fmtS(n){ const r=Math.round(n); return (r>0?'+':'')+r.toLocaleString('en-US'); }
+function fmtP(p){ return p==null?'—':(p>0?'+':'')+(p*100).toFixed(1)+'%'; }
+
+function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false})); r.onerror=rej; r.readAsArrayBuffer(file); }); }
+
+document.getElementById('fProd').addEventListener('change', async e=>{
+  const st=document.getElementById('sProd'); st.className='ustat'; st.textContent='Reading…';
+  try{
+    prodRows=[];
+    for(const f of e.target.files){
+      const wb=await readFile(f);
+      for(const day of DAYS){
+        const ws=wb.Sheets[day]; if(!ws) continue;
+        const dcell=ws['A1']; const date=dcell?serialToDate(dcell.v):null; if(!date) continue;
+        for(let r=33;r<=99;r++){
+          for(const [cat,ic,qc] of BLOCKS){
+            const iv=ws[ic+r], qv=ws[qc+r]; if(!iv||!qv) continue;
+            const item=(typeof iv.v==='string')?iv.v.trim():null;
+            const qty=(typeof qv.v==='number')?qv.v:null;
+            if(!item||!qty) continue;
+            const low=item.toLowerCase(); if(low==='item'||low==='total'||low==='shift') continue;
+            if(EXCLUDE.has(item)) continue;
+            prodRows.push({date, item, cat, qty});
+          }
+        }
+      }
+    }
+    if(!prodRows.length) throw new Error('no rows');
+    const ds=prodRows.map(r=>r.date); const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds));
+    st.className='ustat ok'; st.textContent=`${e.target.files.length} file(s) · ${prodRows.length.toLocaleString()} rows · ${dstr(mn)} → ${dstr(mx)}`;
+  }catch(err){ prodRows=null; st.className='ustat err'; st.textContent='Could not read — expected Monday–Sunday tabs with date in A1'; }
+  ready();
+});
+
+document.getElementById('fTxn').addEventListener('change', async e=>{
+  const st=document.getElementById('sTxn'); st.className='ustat'; st.textContent='Reading (large file — give it a moment)…';
+  try{
+    const wb=await readFile(e.target.files[0]);
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const js=XLSX.utils.sheet_to_json(ws,{raw:true});
+    txnRows=js.map(r=>({item:String(r.ItemCode||'').trim(), date:serialToDate(r.TransactionDate), code:String(r.TransactionCode||''), qty:Number(r.TransactionQty)||0})).filter(r=>r.item&&r.date);
+    const ds=txnRows.map(r=>r.date); const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds));
+    st.className='ustat ok'; st.textContent=`${txnRows.length.toLocaleString()} transactions · ${dstr(mn)} → ${dstr(mx)}`;
+  }catch(err){ txnRows=null; st.className='ustat err'; st.textContent='Could not read — expected ItemCode / TransactionDate / TransactionCode / TransactionQty columns'; }
+  ready();
+});
+
+document.getElementById('fBom').addEventListener('change', async e=>{
+  const st=document.getElementById('sBom'); st.className='ustat'; st.textContent='Reading…';
+  try{
+    const wb=await readFile(e.target.files[0]);
+    const name=wb.SheetNames.includes('BM_BillDetail')?'BM_BillDetail':wb.SheetNames[0];
+    const js=XLSX.utils.sheet_to_json(wb.Sheets[name],{raw:true});
+    bomRows=js.filter(r=>Number(r.ItemType)===1).map(r=>({bill:String(r.BillNo||'').trim(), comp:String(r.ComponentItemCode||'').trim(), qty:Number(r.QuantityPerBill)||0, desc:r.ComponentDesc?String(r.ComponentDesc):''}))
+      .filter(r=>r.bill&&r.comp);
+    st.className='ustat ok'; st.textContent=`${bomRows.length.toLocaleString()} material lines · ${new Set(bomRows.map(r=>r.bill)).size.toLocaleString()} bills`;
+  }catch(err){ bomRows=null; st.className='ustat err'; st.textContent='Could not read — expected BM_BillDetail with BillNo / ComponentItemCode / QuantityPerBill'; }
+  ready();
+});
+
+function ready(){ document.getElementById('btnRun').disabled = !(prodRows&&txnRows&&bomRows); }
+
+document.getElementById('btnRun').addEventListener('click', ()=>{
+  const msg=document.getElementById('runmsg'); msg.textContent='Computing…';
+  setTimeout(()=>{ try{ compute(); msg.textContent='Done — recalculates any time you load new files and press Run.'; }catch(e){ msg.textContent='Error: '+e.message; } }, 30);
+});
+
+function compute(){
+  const pMin=new Date(Math.min(...prodRows.map(r=>r.date))), pMax=new Date(Math.max(...prodRows.map(r=>r.date)));
+  const tMin=new Date(Math.min(...txnRows.map(r=>r.date))), tMax=new Date(Math.max(...txnRows.map(r=>r.date)));
+  const w0=new Date(Math.max(pMin,tMin)), w1=new Date(Math.min(pMax,tMax));
+  document.getElementById('windowTag').style.display='inline-block';
+  document.getElementById('windowTag').textContent='Comparison window: '+dstr(w0)+' → '+dstr(w1);
+
+  const floor=new Map(), cat=new Map();
+  for(const r of prodRows){ if(r.date<w0||r.date>w1) continue; floor.set(r.item,(floor.get(r.item)||0)+r.qty);
+    cat.set(r.item, /^A/i.test(r.item) ? 'Aerosol' : r.cat); }
+  const sage=new Map(), adj=new Map(), cons=new Map();
+  for(const r of txnRows){
+    if(r.date<w0||r.date>w1) continue;
+    if(r.code==='JR'||r.code==='BR') sage.set(r.item,(sage.get(r.item)||0)+r.qty);
+    else if(r.code==='IA'||r.code==='IZ') adj.set(r.item,(adj.get(r.item)||0)+r.qty);
+    else if(r.code==='JI'||r.code==='BI') cons.set(r.item,(cons.get(r.item)||0)-r.qty);
+  }
+
+  // ---- Finished goods ----
+  FG=[];
+  for(const [it,a] of [...floor.entries()].sort()){
+    const b=sage.get(it)||0, ad=adj.get(it)||0;
+    const gap=b-a, after=gap+ad;
+    let status,cm;
+    if(b>0 && Math.abs(gap)/Math.max(a,b)<=0.02){ status='MATCH'; cm='Matches within 2%.'; }
+    else if(UOM.has(it)){ status='UOM'; cm='Known unit-of-measure item (cans/bulk vs cases) — confirm UOM before judging.'; }
+    else if(b===0){ status='MISSING'; cm='No production entry in Sage for this item in the window.'; }
+    else if(Math.abs(after)<Math.abs(gap)*0.35){ status='ADJ CLOSED'; cm='Adjustments substantially close the gap — posting error corrected via IA/IZ.'; }
+    else if(Math.abs(after)<Math.abs(gap)){ status='ADJ PARTIAL'; cm='Adjustments partially close the gap.'; }
+    else { status='OPEN GAP'; cm='Gap not explained by adjustments — investigate the production entries.'; }
+    FG.push({item:it, cat:cat.get(it), floor:a, sage:b, gap, adj:ad, after, pct:a?after/a:null, status, cm});
+  }
+
+  // ---- Raw materials ----
+  const children=new Map();
+  const agg=new Map(); const desc=new Map();
+  for(const r of bomRows){ const k=r.bill+'||'+r.comp; agg.set(k,(agg.get(k)||0)+r.qty); if(r.desc&&!desc.has(r.comp)) desc.set(r.comp,r.desc); }
+  for(const [k,q] of agg){ const [b,c]=k.split('||'); if(!children.has(b)) children.set(b,[]); children.get(b).push([c,q]); }
+  const thF=new Map(), thS=new Map();
+  function explode(item,qty,depth){ if(depth>8) return; const ch=children.get(item); if(!ch) return;
+    for(const [c,per] of ch){ const amt=qty*per; thF.set(c,(thF.get(c)||0)+amt); if(children.has(c)) explode(c,amt,depth+1); } }
+  for(const [it,q] of floor) if(children.has(it)) explode(it,q,0);
+  for(const [it,q] of sage){ if(q<=0) continue; const ch=children.get(it); if(!ch) continue; for(const [c,per] of ch) thS.set(c,(thS.get(c)||0)+q*per); }
+
+  RM=[];
+  const comps=new Set([...thF.keys(),...thS.keys(),...cons.keys()]);
+  for(const c of [...comps].sort()){
+    const ef=thF.get(c)||0, es=thS.get(c)||0, a=cons.get(c)||0, ad=adj.get(c)||0;
+    if(Math.max(Math.abs(ef),Math.abs(es),Math.abs(a),Math.abs(ad))<1e-6) continue;
+    const base=ef>0?ef:es;
+    const dev=a-base, devAfter=(a-ad)-base;
+    let status,cm,pct=base?devAfter/base:null;
+    if(base===0){ status='NO BOM DEMAND'; cm='Consumed with no BOM demand from any produced item — check BOM completeness or mis-issue.'; }
+    else if(a===0&&ad===0){ status='NOT CONSUMED'; cm='BOM demand but zero consumption or adjustment recorded — backflush level or non-inventory item.'; }
+    else if(base>1e6 && dev/base<-0.6){ status='UOM ARTIFACT'; cm='Extreme shortfall tracing to the A13/AA11/AX11 unit-of-measure issue — not a real variance.'; pct=null; }
+    else{
+      const p0=dev/base, p1=devAfter/base;
+      if(Math.abs(p1)<=0.05&&Math.abs(p0)>0.05){ status='ADJ CLOSED'; cm='Deviation '+fmtP(p0)+' before adjustments, '+fmtP(p1)+' after — consumption trued up via IA/IZ.'; }
+      else if(Math.abs(p1)<=0.05){ status='IN LINE'; cm='Consumption in line with BOM (within 5%).'; }
+      else if(Math.abs(p1)<Math.abs(p0)*0.65){ status='ADJ PARTIAL'; cm='Adjustments partially close the gap ('+fmtP(p0)+' → '+fmtP(p1)+').'; }
+      else if(p1>0.15){ status='OVER'; cm='Over-consumed '+fmtP(p1)+' vs BOM even after adjustments — waste/spillage or BOM understated.'; }
+      else if(p1<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(p1)+' vs BOM even after adjustments — unposted issues or BOM overstated.'; }
+      else { status='MODERATE'; cm='Moderate deviation ('+fmtP(p1)+' after adjustments).'; }
+    }
+    RM.push({comp:c, desc:desc.get(c)||'', thF:ef, thS:es, act:a, dev, adj:ad, devAfter, pct, status, cm});
+  }
+  render();
+}
+
+const FG_ORDER={'OPEN GAP':0,'MISSING':1,'ADJ PARTIAL':2,'ADJ CLOSED':3,'UOM':4,'MATCH':5};
+const RM_ORDER={'OVER':0,'UNDER':1,'ADJ PARTIAL':2,'ADJ CLOSED':3,'NO BOM DEMAND':4,'NOT CONSUMED':5,'UOM ARTIFACT':6,'MODERATE':7,'IN LINE':8};
+function pill(s){
+  const map={'MATCH':'p-ok','IN LINE':'p-ok','ADJ CLOSED':'p-info','ADJ PARTIAL':'p-warn','MODERATE':'p-warn','UOM':'p-warn','UOM ARTIFACT':'p-warn','NOT CONSUMED':'p-warn','NO BOM DEMAND':'p-warn','OPEN GAP':'p-bad','MISSING':'p-bad','OVER':'p-bad','UNDER':'p-bad'};
+  return '<span class="pill '+(map[s]||'p-info')+'">'+s+'</span>';
+}
+
+document.getElementById('btnClear').addEventListener('click',()=>{
+  prodRows=null; txnRows=null; bomRows=null; FG=[]; RM=[];
+  for(const id of ['fProd','fTxn','fBom']) document.getElementById(id).value='';
+  document.getElementById('sProd').className='ustat'; document.getElementById('sProd').textContent='No files loaded';
+  document.getElementById('sTxn').className='ustat'; document.getElementById('sTxn').textContent='No file loaded';
+  document.getElementById('sBom').className='ustat'; document.getElementById('sBom').textContent='No file loaded';
+  document.getElementById('results').style.display='none';
+  document.getElementById('windowTag').style.display='none';
+  document.getElementById('btnXlsx').style.display='none';
+  document.getElementById('runmsg').textContent='';
+  ready();
+});
+
+function render(){
+  document.getElementById('results').style.display='block';
+  document.getElementById('btnXlsx').style.display='inline-block';
+  const match=FG.filter(r=>r.status==='MATCH').length, adjc=FG.filter(r=>r.status==='ADJ CLOSED').length;
+  const open=FG.filter(r=>r.status==='OPEN GAP'||r.status==='MISSING').length;
+  const netAfter=FG.filter(r=>!UOM.has(r.item)).reduce((s,r)=>s+r.after,0);
+  const rmInline=RM.filter(r=>r.status==='IN LINE'||r.status==='ADJ CLOSED').length;
+  const rmBad=RM.filter(r=>r.status==='OVER'||r.status==='UNDER').length;
+  document.getElementById('kpis').innerHTML=
+    kpi((100*(match+adjc)/FG.length).toFixed(0)+'%','FG items matched or adjustment-closed', match+adjc>=FG.length*0.7?'good':'warn')+
+    kpi(fmtS(netAfter),'FG net gap after adjustments (cases)', Math.abs(netAfter)<50000?'good':'warn')+
+    kpi(open,'FG items with open gaps', open===0?'good':'bad')+
+    kpi(rmInline+' / '+RM.length,'Raw materials in line or adj-closed','good')+
+    kpi(rmBad,'Raw materials over / under-consumed', rmBad===0?'good':'bad');
+  function kpi(v,l,c){ return '<div class="kpi '+c+'"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
+
+  const segs=[['MATCH','#1b7f4d'],['ADJ CLOSED','#3a5f8a'],['ADJ PARTIAL','#a86400'],['UOM','#c9a227'],['MISSING','#b3261e'],['OPEN GAP','#7a1a14']];
+  let g='',leg='';
+  for(const [s,col] of segs){ const n=FG.filter(r=>r.status===s).length; if(!n) continue;
+    g+='<div style="width:'+(100*n/FG.length)+'%;background:'+col+'" title="'+s+': '+n+'"></div>';
+    leg+='<span><span class="dot" style="background:'+col+'"></span>'+s+' ('+n+')</span>'; }
+  document.getElementById('gauge').innerHTML=g;
+  document.getElementById('gaugeLegend').innerHTML=leg;
+
+  const cats=[...new Set(FG.map(r=>r.cat))].sort();
+  document.getElementById('fgCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>'<option>'+c+'</option>').join('');
+  document.getElementById('fgStatus').innerHTML='<option value="">All statuses</option>'+Object.keys(FG_ORDER).map(s=>'<option>'+s+'</option>').join('');
+  document.getElementById('rmStatus').innerHTML='<option value="">All statuses</option>'+Object.keys(RM_ORDER).map(s=>'<option>'+s+'</option>').join('');
+  drawFG(); drawRM();
+}
+
+let fgSort={k:null,d:1}, rmSort={k:null,d:1};
+function drawFG(){
+  const q=document.getElementById('fgSearch').value.toLowerCase();
+  const c=document.getElementById('fgCat').value, s=document.getElementById('fgStatus').value;
+  let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q))&&(!c||r.cat===c)&&(!s||r.status===s));
+  rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (FG_ORDER[x.status]-FG_ORDER[y.status])||Math.abs(y.after)-Math.abs(x.after));
+  const cols=[['item','Item'],['cat','Category'],['floor','Floor Produced'],['sage','Sage (JR+BR)'],['gap','Gap'],['adj','Adjust­ments'],['after','Gap After Adj'],['pct','% After'],['status','Status'],['cm','Comment']];
+  document.getElementById('fgTable').innerHTML=
+    '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'fg\',\''+k+'\')">'+h+(fgSort.k===k?'<span class="arrow">'+(fgSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
+    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td>'+r.cat+'</td><td class="num">'+fmt(r.floor)+'</td><td class="num">'+fmt(r.sage)+'</td><td class="num">'+fmtS(r.gap)+'</td><td class="num">'+fmtS(r.adj)+'</td><td class="num"><b>'+fmtS(r.after)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+  document.getElementById('fgCount').textContent=rows.length+' of '+FG.length+' items';
+}
+function drawRM(){
+  const q=document.getElementById('rmSearch').value.toLowerCase();
+  const s=document.getElementById('rmStatus').value;
+  let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!s||r.status===s));
+  rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.devAfter)-Math.abs(x.devAfter));
+  const cols=[['comp','Component'],['desc','Description'],['thF','Theoretical (Floor×BOM)'],['thS','Theoretical (Sage×BOM)'],['act','Actual (JI+BI)'],['dev','Deviation'],['adj','Adjust­ments'],['devAfter','Dev After Adj'],['pct','% After'],['status','Status'],['cm','Comment']];
+  document.getElementById('rmTable').innerHTML=
+    '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
+    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td>'+r.desc+'</td><td class="num">'+fmt(r.thF)+'</td><td class="num">'+fmt(r.thS)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtS(r.dev)+'</td><td class="num">'+fmtS(r.adj)+'</td><td class="num"><b>'+fmtS(r.devAfter)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+  document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
+}
+function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
+['fgSearch','fgCat','fgStatus'].forEach(id=>document.getElementById(id).addEventListener('input',drawFG));
+['rmSearch','rmStatus'].forEach(id=>document.getElementById(id).addEventListener('input',drawRM));
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); document.getElementById(t.dataset.panel).classList.add('active');
+}));
+document.getElementById('btnXlsx').addEventListener('click',()=>{
+  const wTag=document.getElementById('windowTag').textContent;
+  const cnt=k=>FG.filter(r=>r.status===k).length;
+  const rcnt=k=>RM.filter(r=>r.status===k).length;
+  const netAfter=FG.filter(r=>!UOM.has(r.item)).reduce((s,r)=>s+r.after,0);
+  const summary=[
+    ['ALAMANCE FOODS, INC. — PRODUCTION vs SAGE 100 RECONCILIATION'],
+    ['Prepared by Bala Pradeep Konda'],
+    [wTag],
+    [],
+    ['FINISHED GOODS SUMMARY'],
+    ['Total items', FG.length],
+    ['Matched within 2%', cnt('MATCH')],
+    ['Closed by adjustments', cnt('ADJ CLOSED')],
+    ['Partially closed by adjustments', cnt('ADJ PARTIAL')],
+    ['Missing in Sage', cnt('MISSING')],
+    ['Open gaps', cnt('OPEN GAP')],
+    ['UOM items (flagged)', cnt('UOM')],
+    ['Net gap after adjustments (cases, excl. UOM items)', Math.round(netAfter)],
+    [],
+    ['RAW MATERIALS SUMMARY'],
+    ['Total components', RM.length],
+    ['In line with BOM (within 5%)', rcnt('IN LINE')],
+    ['Closed by adjustments', rcnt('ADJ CLOSED')],
+    ['Partially closed', rcnt('ADJ PARTIAL')],
+    ['Moderate deviation', rcnt('MODERATE')],
+    ['Over-consumed >15%', rcnt('OVER')],
+    ['Under-consumed >15%', rcnt('UNDER')],
+    ['Consumed with no BOM demand', rcnt('NO BOM DEMAND')],
+    ['BOM demand, nothing consumed', rcnt('NOT CONSUMED')],
+    ['UOM artifacts', rcnt('UOM ARTIFACT')],
+    [],
+    ['METHOD'],
+    ['Finished goods: floor-reported qty produced vs Sage JR+BR; adjustments = net IA+IZ; Gap After Adj = Gap + Adjustments.'],
+    ['Raw materials: theoretical = floor production x BOM (multi-level, no scrap, material lines only); actual = JI+BI; negative adjustments count as unposted consumption.'],
+    ['Excluded lines: D line, Plantation, Worth St. UOM items A13/AA11/AX11 flagged, not judged.'],
+  ];
+  const fgSheet=[['Item','Category','Floor Produced','Sage (JR+BR)','Gap','Adjustments','Gap After Adj','% After','Status','Comment'],
+    ...FG.map(r=>[r.item,r.cat,r.floor,r.sage,r.gap,r.adj,r.after,r.pct,r.status,r.cm])];
+  const rmSheet=[['Component','Description','Theoretical (Floor x BOM)','Theoretical (Sage x BOM)','Actual (JI+BI)','Deviation','Adjustments','Dev After Adj','% After','Status','Comment'],
+    ...RM.map(r=>[r.comp,r.desc,r.thF,r.thS,r.act,r.dev,r.adj,r.devAfter,r.pct,r.status,r.cm])];
+  const wb=XLSX.utils.book_new();
+  const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:52},{wch:14}];
+  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,16,14,14,12,12,14,9,14,70].map(w=>({wch:w}));
+  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,28,20,20,14,12,12,14,9,14,70].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,s1,'Summary');
+  XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
+  XLSX.utils.book_append_sheet(wb,s3,'Raw Materials');
+  XLSX.writeFile(wb,'Production_vs_Sage_Reconciliation.xlsx');
+});
+</script>
+</body>
+</html>
