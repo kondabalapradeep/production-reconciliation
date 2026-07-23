@@ -148,12 +148,13 @@ details.method td, details.method th{position:static; cursor:default;}
   <summary>Method &amp; rules — what every column means</summary>
   <h4>Data sources</h4>
   <ul>
-    <li><b>Sage Item Transaction History</b> — the only quantity source. Production = transaction codes <b>JR</b> (work ticket receipts) + <b>BR</b> (BOM production receipts). Material consumption = <b>JI</b> (work ticket issues) + <b>BI</b> (backflush issues). All other codes (sales, transfers, adjustments, PO receipts) are ignored.</li>
+    <li><b>Sage Item Transaction History</b> — the only quantity source. Production = <b>JR</b> (work ticket receipts) + <b>BR</b> (BOM production receipts) <b>+ IA</b> (internal adjustments) netted against produced items — so an item produced 2,126,030 with a −2M adjustment shows its real net. Material consumption = <b>JI</b> (work ticket issues) + <b>BI</b> (backflush issues), plus IA on materials that are not produced items. Sales, transfers, and PO receipts are ignored.</li>
     <li><b>Bill of Materials</b> — BM_BillDetail gives the standard quantity of each component per unit produced (material lines only; labor/overhead lines excluded; <b>scrap % intentionally NOT applied</b>). CI_Item gives each item's description and LastTotalUnitCost.</li>
   </ul>
   <h4>Finished Goods Produced tab — column by column</h4>
   <ul>
-    <li><b>Sage (JR+BR)</b> — units of this item Sage says were produced in the selected period.</li>
+    <li><b>Lot / Work Ticket(s)</b> — the production run identifiers (Sage work ticket numbers) behind this item's JR receipts in the selected period. The extract has no separate lot-number field, so work tickets serve as the lot codes.</li>
+    <li><b>Sage Net (JR+BR+IA)</b> — units produced per Sage, net of internal adjustments on the item.</li>
     <li><b>Std Unit Cost (BOM)</b> — the standard material cost to make ONE unit (BOM roll-up). <b>Actual Unit Cost</b> — the real material cost per unit this period: allocated actual cost ÷ units produced. Compare the two to see the per-unit impact.</li>
     <li><b>Theoretical Cost</b> — what those units <i>should</i> have cost in materials: units × BOM standard cost (the BOM roll-up: every component quantity × its unit cost, through every BOM level).</li>
     <li><b>Actual Cost (Materials)</b> — what the materials <i>actually</i> consumed for this item cost. Each component's real JI+BI consumption is allocated to the finished goods that required it (in proportion to their BOM demand), so if cans ran 13-per-case but sugar ran even higher, each shows up at its own real rate. Batch over-consumption flows through: a batch's real material cost per unit replaces its standard cost when valuing the finished goods that use it.</li>
@@ -167,14 +168,15 @@ details.method td, details.method th{position:static; cursor:default;}
     <li><b>Used In (Finished Goods)</b> — the finished goods this component flowed into this period. Batches are skipped: components of a batch show the finished goods that consume the batch.</li>
     <li><b>Theoretical (BOM)</b> — Sage production × BOM quantity per unit. Example: 100 cases produced × 12 cans = 1,200 cans expected.</li>
     <li><b>Theoretical Cost</b> — Theoretical qty × unit cost (CI_Item LastTotalUnitCost).</li>
-    <li><b>Actual (JI+BI)</b> — what the team actually posted as consumed (e.g., 1,300 cans including scrap and other real-world factors).</li>
+    <li><b>Actual (JI+BI)</b> — what the team actually posted as consumed (e.g., 1,300 cans including scrap and other real-world factors), plus any internal adjustments (IA) on the material.</li>
     <li><b>Actual Cost</b> — Actual qty × unit cost.</li>
     <li><b>Deviation / Deviation Cost / Deviation %</b> — Actual − Theoretical, in units, dollars, and percent. Because scrap is not in the theoretical, a healthy line runs slightly positive — that overage IS the real scrap/waste cost.</li>
     <li><b>Status</b> — IN LINE ≤5% · MODERATE 5–15% · OVER &gt;15% · UNDER &lt;−15% · NO BOM DEMAND (consumed but no produced item calls for it) · NOT CONSUMED (BOM demand but nothing posted).</li>
   </ul>
   <h4>Other rules</h4>
   <ul>
-    <li><b>Day filter</b> restricts both production and consumption to that transaction date. Issues sometimes post a day apart from their production receipt, so single days run noisier than the full week — judge on the week, drill down by day.</li>
+    <li><b>Day filter</b> restricts both production and consumption to that transaction date. Issues and adjustments often post on a different day than the lot they refer to, so single days run noisier than the full period — <b>the full-period view is the authoritative net</b>; day views show what posted that day.</li>
+    <li><b>IA routing is fixed per item, not per day</b>: an item that is ever produced (has JR/BR anywhere in the file) always has its adjustments netted against production — even when the adjustment posts on a different day than the lot. The extract carries no lot-number field on adjustments, so lot-level matching is not possible until the Sage lot distribution data is added to the export; every adjustment is still counted exactly once.</li>
     <li>Consumption with no BOM demand cannot be attributed to any finished good, so it appears on the Raw Materials tab but not inside any item's Actual Cost.</li>
     <li>Nothing uploads to any server — files are read locally in the browser. The shareable snapshot embeds the computed data so viewers need no files.</li>
   </ul>
@@ -204,7 +206,7 @@ document.getElementById('fTxn').addEventListener('change', async e=>{
     const wb=await readFile(e.target.files[0]);
     const ws=wb.Sheets[wb.SheetNames[0]];
     const js=XLSX.utils.sheet_to_json(ws,{raw:true});
-    txnRows=js.map(r=>({item:String(r.ItemCode||'').trim(), date:serialToDate(r.TransactionDate), code:String(r.TransactionCode||''), qty:Number(r.TransactionQty)||0})).filter(r=>r.item&&r.date);
+    txnRows=js.map(r=>({item:String(r.ItemCode||'').trim(), date:serialToDate(r.TransactionDate), code:String(r.TransactionCode||''), qty:Number(r.TransactionQty)||0, wt:r.WorkTicketNo?String(r.WorkTicketNo):''})).filter(r=>r.item&&r.date);
     const ds=txnRows.map(r=>r.date); const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds));
     st.className='ustat ok'; st.textContent=`${txnRows.length.toLocaleString()} transactions · ${dstr(mn)} → ${dstr(mx)}`;
   }catch(err){ txnRows=null; st.className='ustat err'; st.textContent='Could not read — expected ItemCode / TransactionDate / TransactionCode / TransactionQty columns'; }
@@ -288,11 +290,23 @@ function compute(){
   tag.style.display='inline-block';
   tag.textContent = selDay==='ALL' ? ('Period: '+(dates[0]||'')+' → '+(dates[dates.length-1]||'')) : ('Day: '+selDay);
 
-  const prod=new Map(), cons=new Map();
+  // Stable classification over the WHOLE file: items with any JR/BR are "produced items".
+  // Their IA always nets against production (adjustments target production lots even when
+  // posted on a different day); IA on all other items counts as material consumption.
+  const everProduced=new Set();
+  for(const r of txnRows){ if(r.code==='JR'||r.code==='BR') everProduced.add(r.item); }
+  const jrbr=new Map(), jibi=new Map(), iaMap=new Map(), lots=new Map();
   for(const r of txnRows){
     if(!inDay(r)) continue;
-    if(r.code==='JR'||r.code==='BR') prod.set(r.item,(prod.get(r.item)||0)+r.qty);
-    else if(r.code==='JI'||r.code==='BI') cons.set(r.item,(cons.get(r.item)||0)-r.qty);
+    if(r.code==='JR'||r.code==='BR'){ jrbr.set(r.item,(jrbr.get(r.item)||0)+r.qty);
+      if(r.wt){ if(!lots.has(r.item)) lots.set(r.item,new Set()); lots.get(r.item).add(r.wt); } }
+    else if(r.code==='JI'||r.code==='BI') jibi.set(r.item,(jibi.get(r.item)||0)-r.qty);
+    else if(r.code==='IA') iaMap.set(r.item,(iaMap.get(r.item)||0)+r.qty);
+  }
+  const prod=new Map(jrbr), cons=new Map(jibi);
+  for(const [it,q] of iaMap){
+    if(everProduced.has(it)) prod.set(it,(prod.get(it)||0)+q);
+    else cons.set(it,(cons.get(it)||0)-q);
   }
 
   // demand maps
@@ -330,7 +344,9 @@ function compute(){
       actC += share*(cons.get(c)||0)*actualUnitCost(c,0); }
     const thC=q*u;
     const varC=actC-thC;
-    FG.push({item:it, desc:itemMaster.get(it)||'', cat:catOf(it), qty:q, uStd:u, uAct:q>0?actC/q:null, thC, actC, varC, pct:thC>0?varC/thC:null});
+    const lset=lots.get(it); let lotStr='';
+    if(lset){ const arr=[...lset].sort(); lotStr = arr.length>6 ? arr.slice(0,6).join(', ')+' +'+(arr.length-6)+' more' : arr.join(', '); }
+    FG.push({item:it, desc:itemMaster.get(it)||'', cat:catOf(it), lot:lotStr, qty:q, uStd:u, uAct:q>0?actC/q:null, thC, actC, varC, pct:thC>0?varC/thC:null});
   }
 
   // Used-In resolution
@@ -391,7 +407,7 @@ function render(){
   const varCost=actCost-thCost;
   const rmBad=RM.filter(r=>r.status==='OVER'||r.status==='UNDER').length;
   document.getElementById('kpis').innerHTML=
-    kpi(FG.length,'Items produced (Sage JR+BR)','good')+
+    kpi(FG.length,'Items produced (Sage net)','good')+
     kpi(fmt(totQty),'Total units produced','good')+
     kpi(fmtC(thCost),'Theoretical material cost (BOM)','good')+
     kpi(fmtC(actCost),'Actual material cost (JI+BI)', varCost>0.02*Math.max(thCost,1)?'warn':'good')+
@@ -420,12 +436,12 @@ let fgSort={k:null,d:1}, rmSort={k:null,d:1};
 function drawFG(){
   const q=document.getElementById('fgSearch').value.toLowerCase();
   const c=document.getElementById('fgCat').value;
-  let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!c||r.cat===c));
+  let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.lot.toLowerCase().includes(q))&&(!c||r.cat===c));
   rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC));
-  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['uStd','Std Unit Cost (BOM)'],['uAct','Actual Unit Cost'],['qty','Sage (JR+BR)'],['thC','Theoretical Cost'],['actC','Actual Cost (Materials)'],['varC','Cost Variance'],['pct','Var %']];
+  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['lot','Lot / Work Ticket(s)'],['uStd','Std Unit Cost (BOM)'],['uAct','Actual Unit Cost'],['qty','Sage Net (JR+BR+IA)'],['thC','Theoretical Cost'],['actC','Actual Cost (Materials)'],['varC','Cost Variance'],['pct','Var %']];
   document.getElementById('fgTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'fg\',\''+k+'\')">'+h+(fgSort.k===k?'<span class="arrow">'+(fgSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td class="desc">'+r.desc+'</td><td>'+r.cat+'</td><td class="num">'+fmtU(r.uStd)+'</td><td class="num">'+fmtU(r.uAct)+'</td><td class="num">'+fmt(r.qty)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtC(r.varC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td class="desc">'+r.desc+'</td><td>'+r.cat+'</td><td class="desc" style="font-size:11.5px">'+r.lot+'</td><td class="num">'+fmtU(r.uStd)+'</td><td class="num">'+fmtU(r.uAct)+'</td><td class="num">'+fmt(r.qty)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtC(r.varC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td></tr>').join('');
   document.getElementById('fgCount').textContent=rows.length+' of '+FG.length+' items';
 }
 function drawRM(){
@@ -477,13 +493,13 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
     ['Production = Sage JR+BR. Consumption = JI+BI. Theoretical = production x BOM (no scrap). Costs from CI_Item LastTotalUnitCost; finished-good standard cost = multi-level BOM roll-up.'],
     ['FG Actual Cost = each component\'s real consumption allocated to the finished goods that required it, with batch over-consumption flowing through to the goods that use the batch.'],
   ];
-  const fgSheet=[['Item','Description','Category','Std Unit Cost (BOM)','Actual Unit Cost','Sage (JR+BR)','Theoretical Cost','Actual Cost (Materials)','Cost Variance','Var %'],
-    ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC)).map(r=>[r.item,r.desc,r.cat,r.uStd,r.uAct,r.qty,r.thC,r.actC,r.varC,r.pct])];
+  const fgSheet=[['Item','Description','Category','Lot / Work Ticket(s)','Std Unit Cost (BOM)','Actual Unit Cost','Sage Net (JR+BR+IA)','Theoretical Cost','Actual Cost (Materials)','Cost Variance','Var %'],
+    ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC)).map(r=>[r.item,r.desc,r.cat,r.lot,r.uStd,r.uAct,r.qty,r.thC,r.actC,r.varC,r.pct])];
   const rmSheet=[['Component','Description','Unit Cost','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','Actual (JI+BI)','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
     ...RM.map(r=>[r.comp,r.desc,r.unit,r.used,r.th,r.thC,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
   const wb=XLSX.utils.book_new();
   const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:60},{wch:14}];
-  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,32,16,15,15,14,16,20,14,9].map(w=>({wch:w}));
+  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,32,16,34,15,15,16,16,20,14,9].map(w=>({wch:w}));
   const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,32,11,40,16,15,14,13,12,14,11,14,64].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s1,'Summary');
   XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
@@ -493,7 +509,7 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
 
 // ---- Shareable snapshot: embeds compact data into a copy of this page ----
 document.getElementById('btnSnap').addEventListener('click',()=>{
-  const tx=txnRows.filter(r=>['JR','BR','JI','BI'].includes(r.code)).map(r=>[r.item,dstr(r.date),r.code,r.qty]);
+  const tx=txnRows.filter(r=>['JR','BR','JI','BI','IA'].includes(r.code)).map(r=>[r.item,dstr(r.date),r.code,r.qty,r.wt||'']);
   const bm=bomRows.map(r=>[r.bill,r.comp,r.qty]);
   const need=new Set(); for(const t of tx) need.add(t[0]); for(const b of bm){ need.add(b[0]); need.add(b[1]); }
   const im=[]; for(const [k,v] of itemMaster) if(need.has(k)) im.push([k,v]);
@@ -516,7 +532,7 @@ if(window.EMBEDDED){
   document.getElementById('subtitle').textContent='Interactive snapshot — data embedded; use the day toggles, filters, and Excel download.';
   window.addEventListener('load',()=>{
     try{
-      txnRows=window.EMBEDDED.tx.map(t=>({item:t[0], date:new Date(t[1]+'T00:00:00Z'), code:t[2], qty:t[3]}));
+      txnRows=window.EMBEDDED.tx.map(t=>({item:t[0], date:new Date(t[1]+'T00:00:00Z'), code:t[2], qty:t[3], wt:t[4]||''}));
       bomRows=window.EMBEDDED.bm.map(b=>({bill:b[0], comp:b[1], qty:b[2], desc:''}));
       itemMaster=new Map(window.EMBEDDED.im); itemCost=new Map(window.EMBEDDED.ic);
       prepare(); compute();
