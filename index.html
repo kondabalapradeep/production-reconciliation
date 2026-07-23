@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Production ⇄ Sage 100 Reconciliation</title>
+<title>Sage 100 Production &amp; Material Consumption</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -19,7 +19,7 @@ header{border-bottom:3px solid var(--navy); padding:14px 0 12px; margin-bottom:1
 header h1{font-size:20px; font-weight:700; letter-spacing:.2px; color:var(--navy);}
 header .sub{color:var(--steel); font-size:12.5px;}
 #windowTag{font-size:12.5px; color:var(--navy); font-weight:600; background:var(--info-bg); padding:4px 10px; border-radius:4px; display:none;}
-.uploads{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:14px;}
+.uploads{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-bottom:14px;}
 .ucard{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px;}
 .ucard h3{font-size:13px; color:var(--navy); margin-bottom:2px;}
 .ucard p{font-size:12px; color:var(--steel); margin-bottom:8px;}
@@ -32,30 +32,35 @@ button.run{background:var(--navy); color:#fff; border:none; border-radius:6px; p
 button.run:disabled{background:#9fb2c6; cursor:not-allowed;}
 button.ghost{background:#fff; color:var(--navy); border:1px solid var(--navy); border-radius:6px; padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer;}
 #runmsg{font-size:12.5px; color:var(--steel);}
-.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:8px;}
+.daybar{display:flex; gap:8px; align-items:center; margin:0 0 14px; flex-wrap:wrap; display:none;}
+.daybar .lbl{font-size:12.5px; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:.5px;}
+.daypill{padding:6px 14px; border-radius:16px; border:1px solid var(--line); background:#fff; font-size:12.5px; font-weight:600; color:var(--steel); cursor:pointer;}
+.daypill.active{background:var(--navy); color:#fff; border-color:var(--navy);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-bottom:8px;}
 .kpi{background:var(--card); border:1px solid var(--line); border-left:5px solid var(--navy); border-radius:6px; padding:12px 14px;}
-.kpi .v{font-size:24px; font-weight:700; font-variant-numeric:tabular-nums;}
+.kpi .v{font-size:22px; font-weight:700; font-variant-numeric:tabular-nums;}
 .kpi .l{font-size:11.5px; color:var(--steel); text-transform:uppercase; letter-spacing:.5px; margin-top:2px;}
 .kpi.good{border-left-color:var(--ok);} .kpi.warn{border-left-color:var(--warn);} .kpi.bad{border-left-color:var(--bad);}
 .gauge{height:14px; border-radius:7px; overflow:hidden; display:flex; margin:14px 0 4px; border:1px solid var(--line); background:#fff;}
 .gauge div{height:100%;}
 .gauge-legend{display:flex; gap:16px; font-size:11.5px; color:var(--steel); margin-bottom:18px; flex-wrap:wrap;}
 .dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px;}
-.tabs{display:flex; gap:0; border-bottom:2px solid var(--line); margin-bottom:0;}
+.tabs{display:flex; gap:0; border-bottom:2px solid var(--line);}
 .tab{padding:9px 20px; font-size:13.5px; font-weight:600; color:var(--steel); cursor:pointer; border:none; background:none; border-bottom:3px solid transparent; margin-bottom:-2px;}
 .tab.active{color:var(--navy); border-bottom-color:var(--navy);}
 .panel{display:none; background:var(--card); border:1px solid var(--line); border-top:none; border-radius:0 0 8px 8px; padding:14px;}
 .panel.active{display:block;}
 .filters{display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; align-items:center;}
 .filters input, .filters select{padding:6px 9px; border:1px solid var(--line); border-radius:5px; font-size:12.5px;}
-.filters input{width:200px;}
+.filters input{width:220px;}
 .tblwrap{overflow:auto; max-height:560px; border:1px solid var(--line); border-radius:6px;}
 table{border-collapse:collapse; width:100%; font-size:12.5px;}
 th{background:var(--navy); color:#fff; text-align:left; padding:8px 10px; position:sticky; top:0; cursor:pointer; white-space:nowrap; font-size:12px;}
 th .arrow{font-size:9px; margin-left:3px;}
 td{padding:6px 10px; border-bottom:1px solid #eef1f5; white-space:nowrap; font-variant-numeric:tabular-nums;}
 td.num{text-align:right;}
-td.cmt{white-space:normal; min-width:280px; max-width:460px; color:#37475d; font-size:12px;}
+td.desc{white-space:normal; min-width:160px; max-width:260px;}
+td.cmt{white-space:normal; min-width:240px; max-width:420px; color:#37475d; font-size:12px;}
 tr:hover td{background:#f2f6fa;}
 .pill{display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;}
 .p-ok{background:var(--ok-bg); color:var(--ok);} .p-warn{background:var(--warn-bg); color:var(--warn);}
@@ -71,8 +76,8 @@ details.method li{margin:6px 0 0 18px;}
 <div class="wrap">
 <header>
   <div>
-    <h1>Production ⇄ Sage 100 Reconciliation</h1>
-    <div class="sub">Upload the weekly production report(s), the Sage item transaction extract, and the BOM — everything runs in your browser.</div>
+    <h1>Sage 100 Production &amp; Material Consumption</h1>
+    <div class="sub">Upload the weekly Sage item transaction extract and the BOM — everything runs in your browser.</div>
   </div>
   <div style="text-align:right">
     <div style="font-size:15px;font-weight:800;letter-spacing:1.2px;color:var(--navy)">ALAMANCE FOODS, INC.</div>
@@ -83,47 +88,41 @@ details.method li{margin:6px 0 0 18px;}
 
 <div class="uploads">
   <div class="ucard">
-    <h3>1 · Daily Production Reports (.xlsm)</h3>
-    <p>One or more weekly workbooks (Monday–Sunday tabs)</p>
-    <input type="file" id="fProd" accept=".xlsm,.xlsx" multiple>
-    <div class="ustat" id="sProd">No files loaded</div>
-  </div>
-  <div class="ucard">
-    <h3>2 · Sage Item Transactions (.xlsx)</h3>
-    <p>Item Transaction History export (all codes)</p>
+    <h3>1 · Sage Item Transactions (.xlsx)</h3>
+    <p>Weekly Item Transaction History export (all codes)</p>
     <input type="file" id="fTxn" accept=".xlsx,.xlsm">
     <div class="ustat" id="sTxn">No file loaded</div>
   </div>
   <div class="ucard">
-    <h3>3 · Bill of Materials (.xlsx)</h3>
-    <p>BM_BillDetail + CI_Item (descriptions)</p>
+    <h3>2 · Bill of Materials (.xlsx)</h3>
+    <p>BM_BillDetail + CI_Item (descriptions &amp; unit costs)</p>
     <input type="file" id="fBom" accept=".xlsx,.xlsm">
     <div class="ustat" id="sBom">No file loaded</div>
   </div>
 </div>
 
 <div class="runbar">
-  <button class="run" id="btnRun" disabled>Run reconciliation</button>
+  <button class="run" id="btnRun" disabled>Run report</button>
   <button class="ghost" id="btnClear">Clear files &amp; start over</button>
   <button class="ghost" id="btnXlsx" style="display:none">Download full report (Excel)</button>
   <span id="runmsg"></span>
 </div>
 
 <div id="results">
+  <div class="daybar" id="daybar"></div>
   <div class="kpis" id="kpis"></div>
   <div class="gauge" id="gauge"></div>
   <div class="gauge-legend" id="gaugeLegend"></div>
 
   <div class="tabs">
-    <button class="tab active" data-panel="pFG">Finished Goods</button>
-    <button class="tab" data-panel="pRM">Raw Materials</button>
+    <button class="tab active" data-panel="pFG">Finished Goods Produced</button>
+    <button class="tab" data-panel="pRM">Raw Material Consumption</button>
   </div>
 
   <div class="panel active" id="pFG">
     <div class="filters">
-      <input type="text" id="fgSearch" placeholder="Search item…">
+      <input type="text" id="fgSearch" placeholder="Search item or description…">
       <select id="fgCat"><option value="">All categories</option></select>
-      <select id="fgStatus"><option value="">All statuses</option></select>
       <span class="count" id="fgCount"></span>
     </div>
     <div class="tblwrap"><table id="fgTable"></table></div>
@@ -131,7 +130,7 @@ details.method li{margin:6px 0 0 18px;}
 
   <div class="panel" id="pRM">
     <div class="filters">
-      <input type="text" id="rmSearch" placeholder="Search component…">
+      <input type="text" id="rmSearch" placeholder="Search component or description…">
       <select id="rmStatus"><option value="">All statuses</option></select>
       <span class="count" id="rmCount"></span>
     </div>
@@ -140,63 +139,33 @@ details.method li{margin:6px 0 0 18px;}
 </div>
 
 <details class="method">
-  <summary>Method &amp; rules baked into this dashboard</summary>
+  <summary>Method &amp; rules baked into this report</summary>
   <ul>
-    <li><b>Finished goods:</b> floor-reported <i>quantity produced</i> (all 5 category blocks per daily tab) vs Sage production entries (JR work-ticket receipts + BR BOM receipts). Gap After Adjustments adds net IA + IZ on the item — where a posting error was trued up by adjustment, the gap closes.</li>
-    <li><b>Raw materials:</b> theoretical = floor production × BOM (multi-level explosion, <i>no scrap %</i>, material lines only); Actual = JI + BI issues. Deviation = Actual − Theoretical (Floor×BOM). Adjustments are applied to finished goods only.</li>
-    <li><b>Comparison window</b> = overlap of the production dates and the transaction dates, computed automatically from the files.</li>
-    <li><b>Excluded item lines:</b> D line, Plantation, Worth St (not item codes).</li>
-    <li><b>Costs:</b> raw material cost = qty × LastTotalUnitCost from CI_Item. Finished-goods / batch unit cost = BOM roll-up (sum of all component quantities × their unit costs, through every BOM level). Deviation Cost = deviation qty × unit cost.</li>
-    <li><b>Known UOM items</b> (A13, AA11, AX11) are flagged, not judged.</li>
+    <li><b>Finished goods:</b> Sage production entries — JR (work ticket receipts) + BR (BOM production receipts) — per item for the selected day or full week. Sage Cost = quantity × unit cost (BOM roll-up: sum of all component quantities × their CI_Item LastTotalUnitCost, through every BOM level).</li>
+    <li><b>Raw materials:</b> Theoretical = Sage production × BOM QuantityPerBill (material lines only, <i>no scrap %</i>). Because bulk/batch production is itself recorded in Sage, each production level generates demand for its own components. Actual = JI (work ticket issues) + BI (backflush issues). Deviation = Actual − Theoretical; Deviation Cost = deviation × LastTotalUnitCost. Actual above theoretical includes real-world scrap and waste.</li>
+    <li><b>Day filter:</b> toggles restrict both production and consumption to that transaction date. Note: material issues sometimes post a day apart from the production receipt of the same ticket, so single-day deviations can be noisier than the full-week view.</li>
+    <li><b>Categories</b> are inferred from item code prefix: A = Aerosol, P = Pops, H = Rainbow/Drinks, W = Water 1 Gal, L = Water 2.5 Gal; everything else = Batch/Other. Finished goods list in that order, with batches always at the bottom.</li>
+    <li><b>Used In</b> shows the finished goods a component flows into for this period's production. When a component belongs to a batch, the batch is skipped and the finished goods that consume the batch are shown instead.</li>
     <li>Nothing uploads to any server — files are read locally in the browser.</li>
   </ul>
 </details>
 </div>
 
 <script>
-const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-const BLOCKS=[['Aerosol','B','C'],['Pops','I','J'],['Rainbow / Drinks','O','Q'],['Gallon (1 Gal)','X','Z'],['2.5 Gallon','AG','AI']];
-const EXCLUDE=new Set(['D line','Plantation','Worth St']);
-const UOM=new Set(['A13','AA11','AX11']);
-let prodRows=null, txnRows=null, bomRows=null, FG=[], RM=[], itemMaster=new Map(), itemCost=new Map();
+let txnRows=null, bomRows=null, itemMaster=new Map(), itemCost=new Map();
+let FG=[], RM=[], dates=[], selDay='ALL';
+let children=new Map(), costMemo=new Map();
 
 function serialToDate(v){ if(v instanceof Date) return v; if(typeof v==='number'&&v>20000&&v<80000){return new Date(Date.UTC(1899,11,30)+v*86400000);} const d=new Date(v); return isNaN(d)?null:d; }
 function dstr(d){ return d.toISOString().slice(0,10); }
 function fmt(n){ return n==null?'':Math.round(n).toLocaleString('en-US'); }
 function fmtS(n){ const r=Math.round(n); return (r>0?'+':'')+r.toLocaleString('en-US'); }
 function fmtP(p){ return p==null?'—':(p>0?'+':'')+(p*100).toFixed(1)+'%'; }
-function fmtC(n){ if(n==null) return '—'; const v=Math.round(n); const sign=v<0?'-':(v>0&&arguments[1]?'+':''); return sign+'$'+Math.abs(v).toLocaleString('en-US'); }
+function fmtC(n,signed){ if(n==null) return '—'; const v=Math.round(n); const sign=v<0?'-':(v>0&&signed?'+':''); return sign+'$'+Math.abs(v).toLocaleString('en-US'); }
+function catOf(it){ const c=it[0]?it[0].toUpperCase():''; return c==='A'?'Aerosol':c==='P'?'Pops':c==='H'?'Rainbow / Drinks':c==='W'?'Water 1 Gal':c==='L'?'Water 2.5 Gal':'Batch / Other'; }
+const CAT_ORDER={'Aerosol':0,'Pops':1,'Rainbow / Drinks':2,'Water 1 Gal':3,'Water 2.5 Gal':4,'Batch / Other':5};
 
 function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false})); r.onerror=rej; r.readAsArrayBuffer(file); }); }
-
-document.getElementById('fProd').addEventListener('change', async e=>{
-  const st=document.getElementById('sProd'); st.className='ustat'; st.textContent='Reading…';
-  try{
-    prodRows=[];
-    for(const f of e.target.files){
-      const wb=await readFile(f);
-      for(const day of DAYS){
-        const ws=wb.Sheets[day]; if(!ws) continue;
-        const dcell=ws['A1']; const date=dcell?serialToDate(dcell.v):null; if(!date) continue;
-        for(let r=33;r<=99;r++){
-          for(const [cat,ic,qc] of BLOCKS){
-            const iv=ws[ic+r], qv=ws[qc+r]; if(!iv||!qv) continue;
-            const item=(typeof iv.v==='string')?iv.v.trim():null;
-            const qty=(typeof qv.v==='number')?qv.v:null;
-            if(!item||!qty) continue;
-            const low=item.toLowerCase(); if(low==='item'||low==='total'||low==='shift') continue;
-            if(EXCLUDE.has(item)) continue;
-            prodRows.push({date, item, cat, qty});
-          }
-        }
-      }
-    }
-    if(!prodRows.length) throw new Error('no rows');
-    const ds=prodRows.map(r=>r.date); const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds));
-    st.className='ustat ok'; st.textContent=`${e.target.files.length} file(s) · ${prodRows.length.toLocaleString()} rows · ${dstr(mn)} → ${dstr(mx)}`;
-  }catch(err){ prodRows=null; st.className='ustat err'; st.textContent='Could not read — expected Monday–Sunday tabs with date in A1'; }
-  ready();
-});
 
 document.getElementById('fTxn').addEventListener('change', async e=>{
   const st=document.getElementById('sTxn'); st.className='ustat'; st.textContent='Reading (large file — give it a moment)…';
@@ -231,221 +200,237 @@ document.getElementById('fBom').addEventListener('change', async e=>{
   ready();
 });
 
-function ready(){ document.getElementById('btnRun').disabled = !(prodRows&&txnRows&&bomRows); }
-
-document.getElementById('btnRun').addEventListener('click', ()=>{
-  const msg=document.getElementById('runmsg'); msg.textContent='Computing…';
-  setTimeout(()=>{ try{ compute(); msg.textContent='Done — recalculates any time you load new files and press Run.'; }catch(e){ msg.textContent='Error: '+e.message; } }, 30);
-});
-
-function compute(){
-  const pMin=new Date(Math.min(...prodRows.map(r=>r.date))), pMax=new Date(Math.max(...prodRows.map(r=>r.date)));
-  const tMin=new Date(Math.min(...txnRows.map(r=>r.date))), tMax=new Date(Math.max(...txnRows.map(r=>r.date)));
-  const w0=new Date(Math.max(pMin,tMin)), w1=new Date(Math.min(pMax,tMax));
-  document.getElementById('windowTag').style.display='inline-block';
-  document.getElementById('windowTag').textContent='Comparison window: '+dstr(w0)+' → '+dstr(w1);
-
-  const floor=new Map(), cat=new Map();
-  for(const r of prodRows){ if(r.date<w0||r.date>w1) continue; floor.set(r.item,(floor.get(r.item)||0)+r.qty);
-    cat.set(r.item, /^A/i.test(r.item) ? 'Aerosol' : r.cat); }
-  const sage=new Map(), adj=new Map(), cons=new Map();
-  for(const r of txnRows){
-    if(r.date<w0||r.date>w1) continue;
-    if(r.code==='JR'||r.code==='BR') sage.set(r.item,(sage.get(r.item)||0)+r.qty);
-    else if(r.code==='IA'||r.code==='IZ') adj.set(r.item,(adj.get(r.item)||0)+r.qty);
-    else if(r.code==='JI'||r.code==='BI') cons.set(r.item,(cons.get(r.item)||0)-r.qty);
-  }
-
-  // ---- Finished goods ----
-  FG=[];
-  for(const [it,a] of [...floor.entries()].sort()){
-    const b=sage.get(it)||0, ad=adj.get(it)||0;
-    const gap=b-a, after=gap+ad;
-    let status,cm;
-    if(b>0 && Math.abs(gap)/Math.max(a,b)<=0.02){ status='MATCH'; cm='Matches within 2%.'; }
-    else if(UOM.has(it)){ status='UOM'; cm='Known unit-of-measure item (cans/bulk vs cases) — confirm UOM before judging.'; }
-    else if(b===0){ status='MISSING'; cm='No production entry in Sage for this item in the window.'; }
-    else if(Math.abs(after)<Math.abs(gap)*0.35){ status='ADJ CLOSED'; cm='Adjustments substantially close the gap — posting error corrected via IA/IZ.'; }
-    else if(Math.abs(after)<Math.abs(gap)){ status='ADJ PARTIAL'; cm='Adjustments partially close the gap.'; }
-    else { status='OPEN GAP'; cm='Gap not explained by adjustments — investigate the production entries.'; }
-    FG.push({item:it, desc:itemMaster.get(it)||'', cat:cat.get(it), floor:a, sage:b, gap, adj:ad, after, pct:a?after/a:null, status, cm});
-  }
-
-  // ---- Raw materials ----
-  const children=new Map();
-  const agg=new Map(); const desc=new Map();
-  for(const r of bomRows){ const k=r.bill+'||'+r.comp; agg.set(k,(agg.get(k)||0)+r.qty); if(r.desc&&!desc.has(r.comp)) desc.set(r.comp,r.desc); }
-  for(const [k,q] of agg){ const [b,c]=k.split('||'); if(!children.has(b)) children.set(b,[]); children.get(b).push([c,q]); }
-  const thF=new Map(), thS=new Map();
-  function explode(item,qty,depth){ if(depth>8) return; const ch=children.get(item); if(!ch) return;
-    for(const [c,per] of ch){ const amt=qty*per; thF.set(c,(thF.get(c)||0)+amt); if(children.has(c)) explode(c,amt,depth+1); } }
-  for(const [it,q] of floor) if(children.has(it)) explode(it,q,0);
-  for(const [it,q] of sage){ if(q<=0) continue; const ch=children.get(it); if(!ch) continue; for(const [c,per] of ch) thS.set(c,(thS.get(c)||0)+q*per); }
-
-  RM=[];
-  const comps=new Set([...thF.keys(),...thS.keys(),...cons.keys()]);
-  for(const c of [...comps].sort()){
-    const ef=thF.get(c)||0, es=thS.get(c)||0, a=cons.get(c)||0;
-    if(Math.max(Math.abs(ef),Math.abs(es),Math.abs(a))<1e-6) continue;
-    const base=ef>0?ef:es;
-    const dev=a-base;
-    let status,cm,pct=base?dev/base:null;
-    if(base===0){ status='NO BOM DEMAND'; cm='Consumed with no BOM demand from any produced item — check BOM completeness or mis-issue.'; }
-    else if(a===0){ status='NOT CONSUMED'; cm='BOM demand but zero consumption recorded — backflush level or non-inventory item.'; }
-    else if(base>1e6 && dev/base<-0.6){ status='UOM ARTIFACT'; cm='Extreme shortfall tracing to the A13/AA11/AX11 unit-of-measure issue — not a real variance.'; pct=null; }
-    else{
-      if(Math.abs(pct)<=0.05){ status='IN LINE'; cm='Consumption in line with BOM (within 5%).'; }
-      else if(pct>0.15){ status='OVER'; cm='Over-consumed '+fmtP(pct)+' vs BOM — waste/spillage or BOM understated.'; }
-      else if(pct<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(pct)+' vs BOM — unposted issues or BOM overstated.'; }
-      else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
-    }
-    RM.push({comp:c, desc:itemMaster.get(c)||desc.get(c)||'', thF:ef, thS:es, act:a, dev, pct, status, cm});
-  }
-  // ---- Cost annotation (LastTotalUnitCost from CI_Item; BOM roll-up for bills) ----
-  const costMemo=new Map();
-  function unitCost(item, depth){
-    if(depth>8) return itemCost.get(item)||0;
-    if(costMemo.has(item)) return costMemo.get(item);
-    let v;
-    const ch=children.get(item);
-    if(ch && ch.length){ v=0; for(const [c,per] of ch) v+=per*unitCost(c,depth+1); if(v===0) v=itemCost.get(item)||0; }
-    else v=itemCost.get(item)||0;
-    costMemo.set(item,v); return v;
-  }
-  for(const r of FG){ const u=unitCost(r.item,0); r.ucost=u; r.floorC=r.floor*u; r.sageC=r.sage*u; r.gapC=r.after*u; }
-  for(const r of RM){ const u=itemCost.get(r.comp)!=null?itemCost.get(r.comp):unitCost(r.comp,0); r.ucost=u; r.thC=r.thF>0?r.thF*u:r.thS*u; r.actC=r.act*u; r.devC=r.dev*u; }
-  render();
-}
-
-const FG_ORDER={'OPEN GAP':0,'MISSING':1,'ADJ PARTIAL':2,'ADJ CLOSED':3,'UOM':4,'MATCH':5};
-const RM_ORDER={'OVER':0,'UNDER':1,'NO BOM DEMAND':2,'NOT CONSUMED':3,'UOM ARTIFACT':4,'MODERATE':5,'IN LINE':6};
-function pill(s){
-  const map={'MATCH':'p-ok','IN LINE':'p-ok','ADJ CLOSED':'p-info','ADJ PARTIAL':'p-warn','MODERATE':'p-warn','UOM':'p-warn','UOM ARTIFACT':'p-warn','NOT CONSUMED':'p-warn','NO BOM DEMAND':'p-warn','OPEN GAP':'p-bad','MISSING':'p-bad','OVER':'p-bad','UNDER':'p-bad'};
-  return '<span class="pill '+(map[s]||'p-info')+'">'+s+'</span>';
-}
+function ready(){ document.getElementById('btnRun').disabled = !(txnRows&&bomRows); }
 
 document.getElementById('btnClear').addEventListener('click',()=>{
-  prodRows=null; txnRows=null; bomRows=null; FG=[]; RM=[];
-  for(const id of ['fProd','fTxn','fBom']) document.getElementById(id).value='';
-  document.getElementById('sProd').className='ustat'; document.getElementById('sProd').textContent='No files loaded';
+  txnRows=null; bomRows=null; FG=[]; RM=[]; dates=[]; selDay='ALL';
+  itemMaster=new Map(); itemCost=new Map();
+  for(const id of ['fTxn','fBom']) document.getElementById(id).value='';
   document.getElementById('sTxn').className='ustat'; document.getElementById('sTxn').textContent='No file loaded';
   document.getElementById('sBom').className='ustat'; document.getElementById('sBom').textContent='No file loaded';
   document.getElementById('results').style.display='none';
+  document.getElementById('daybar').style.display='none';
   document.getElementById('windowTag').style.display='none';
   document.getElementById('btnXlsx').style.display='none';
   document.getElementById('runmsg').textContent='';
   ready();
 });
 
+document.getElementById('btnRun').addEventListener('click', ()=>{
+  const msg=document.getElementById('runmsg'); msg.textContent='Computing…';
+  setTimeout(()=>{ try{ prepare(); compute(); msg.textContent='Done — use the day toggles to drill into a single date.'; }catch(e){ msg.textContent='Error: '+e.message; } }, 30);
+});
+
+function prepare(){
+  // BOM maps + cost roll-up
+  children=new Map(); costMemo=new Map();
+  const agg=new Map();
+  for(const r of bomRows){ const k=r.bill+'||'+r.comp; agg.set(k,(agg.get(k)||0)+r.qty); if(r.desc&&!itemMaster.has(r.comp)) itemMaster.set(r.comp,r.desc); }
+  for(const [k,q] of agg){ const [b,c]=k.split('||'); if(!children.has(b)) children.set(b,[]); children.get(b).push([c,q]); }
+  // day list (dates with production or consumption)
+  const dset=new Set();
+  for(const r of txnRows){ if(r.code==='JR'||r.code==='BR'||r.code==='JI'||r.code==='BI') dset.add(dstr(r.date)); }
+  dates=[...dset].sort();
+  selDay='ALL';
+  const bar=document.getElementById('daybar');
+  bar.innerHTML='<span class="lbl">Day:</span>'+
+    '<button class="daypill active" data-d="ALL">Full week</button>'+
+    dates.map(d=>{ const wd=new Date(d+'T00:00:00Z').toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'}); return '<button class="daypill" data-d="'+d+'">'+wd+' '+d.slice(5)+'</button>'; }).join('');
+  bar.style.display='flex';
+  bar.querySelectorAll('.daypill').forEach(b=>b.addEventListener('click',()=>{
+    bar.querySelectorAll('.daypill').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); selDay=b.dataset.d; compute();
+  }));
+}
+
+function unitCost(item,depth){
+  if(depth>8) return itemCost.get(item)||0;
+  if(costMemo.has(item)) return costMemo.get(item);
+  let v; const ch=children.get(item);
+  if(ch && ch.length){ v=0; for(const [c,per] of ch) v+=per*unitCost(c,depth+1); if(v===0) v=itemCost.get(item)||0; }
+  else v=itemCost.get(item)||0;
+  costMemo.set(item,v); return v;
+}
+
+function compute(){
+  const inDay=r=> selDay==='ALL' || dstr(r.date)===selDay;
+  const tag=document.getElementById('windowTag');
+  tag.style.display='inline-block';
+  tag.textContent = selDay==='ALL' ? ('Period: '+(dates[0]||'')+' → '+(dates[dates.length-1]||'')) : ('Day: '+selDay);
+
+  const prod=new Map(), cons=new Map();
+  for(const r of txnRows){
+    if(!inDay(r)) continue;
+    if(r.code==='JR'||r.code==='BR') prod.set(r.item,(prod.get(r.item)||0)+r.qty);
+    else if(r.code==='JI'||r.code==='BI') cons.set(r.item,(cons.get(r.item)||0)-r.qty);
+  }
+
+  // Finished goods
+  FG=[];
+  for(const [it,q] of [...prod.entries()].sort()){
+    if(q===0) continue;
+    const u=unitCost(it,0);
+    FG.push({item:it, desc:itemMaster.get(it)||'', cat:catOf(it), qty:q, cost:q*u});
+  }
+
+  // Raw materials: theoretical from production x BOM (single level per produced item)
+  const th=new Map(), directParents=new Map();
+  for(const [it,q] of prod){ if(q<=0) continue; const ch=children.get(it); if(!ch) continue;
+    for(const [c,per] of ch){ th.set(c,(th.get(c)||0)+q*per);
+      if(!directParents.has(c)) directParents.set(c,new Set()); directParents.get(c).add(it); } }
+  // resolve a produced parent to finished goods (skip batches by climbing to produced FG users)
+  const fgResolveMemo=new Map();
+  function resolveFG(p,depth){
+    if(depth>6) return [p];
+    if(fgResolveMemo.has(p)) return fgResolveMemo.get(p);
+    let out;
+    if(catOf(p)!=='Batch / Other'){ out=[p]; }
+    else{
+      const users=[];
+      for(const [it,q] of prod){ if(q<=0||it===p) continue; const ch=children.get(it); if(!ch) continue;
+        if(ch.some(([c])=>c===p)) users.push(it); }
+      if(!users.length) out=[p];
+      else{ const set=new Set(); for(const u of users) for(const f of resolveFG(u,depth+1)) set.add(f); out=[...set]; }
+    }
+    fgResolveMemo.set(p,out); return out;
+  }
+  function usedInList(c){
+    const ps=directParents.get(c); if(!ps) return '';
+    const set=new Set();
+    for(const p of ps) for(const f of resolveFG(p,0)) set.add(f);
+    const arr=[...set].sort((a,b)=>(CAT_ORDER[catOf(a)]-CAT_ORDER[catOf(b)])||a.localeCompare(b));
+    return arr.length>8 ? arr.slice(0,8).join(', ')+' +'+(arr.length-8)+' more' : arr.join(', ');
+  }
+  RM=[];
+  const comps=new Set([...th.keys(),...cons.keys()]);
+  for(const c of [...comps].sort()){
+    const e=th.get(c)||0, a=cons.get(c)||0;
+    if(Math.abs(e)<1e-6 && Math.abs(a)<1e-6) continue;
+    const u=itemCost.get(c)!=null?itemCost.get(c):unitCost(c,0);
+    const dev=a-e; let pct=e>0?dev/e:null, status, cm;
+    if(e===0){ status='NO BOM DEMAND'; cm='Consumed with no BOM demand from any produced item — check BOM completeness or mis-issue.'; }
+    else if(a===0){ status='NOT CONSUMED'; cm='BOM demand but zero consumption recorded — non-inventory item or issue not posted.'; }
+    else if(Math.abs(pct)<=0.05){ status='IN LINE'; cm='Consumption in line with BOM (within 5%).'; }
+    else if(pct>0.15){ status='OVER'; cm='Over-consumed '+fmtP(pct)+' vs BOM — scrap/waste above standard or BOM understated.'; }
+    else if(pct<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(pct)+' vs BOM — issues not fully posted or BOM overstated.'; }
+    else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
+    RM.push({comp:c, desc:itemMaster.get(c)||'', used:usedInList(c), th:e, thC:e*u, act:a, actC:a*u, dev, devC:dev*u, pct, status, cm});
+  }
+  render();
+}
+
+const RM_ORDER={'OVER':0,'UNDER':1,'NO BOM DEMAND':2,'NOT CONSUMED':3,'MODERATE':4,'IN LINE':5};
+function pill(s){
+  const map={'IN LINE':'p-ok','MODERATE':'p-warn','NOT CONSUMED':'p-warn','NO BOM DEMAND':'p-warn','OVER':'p-bad','UNDER':'p-bad'};
+  return '<span class="pill '+(map[s]||'p-info')+'">'+s+'</span>';
+}
+
 function render(){
   document.getElementById('results').style.display='block';
   document.getElementById('btnXlsx').style.display='inline-block';
-  const match=FG.filter(r=>r.status==='MATCH').length, adjc=FG.filter(r=>r.status==='ADJ CLOSED').length;
-  const open=FG.filter(r=>r.status==='OPEN GAP'||r.status==='MISSING').length;
-  const netAfter=FG.filter(r=>!UOM.has(r.item)).reduce((s,r)=>s+r.after,0);
-  const rmInline=RM.filter(r=>r.status==='IN LINE').length;
+  const totQty=FG.reduce((s,r)=>s+r.qty,0), totCost=FG.reduce((s,r)=>s+r.cost,0);
+  const thCost=RM.reduce((s,r)=>s+r.thC,0), actCost=RM.reduce((s,r)=>s+r.actC,0);
+  const devCost=actCost-thCost;
   const rmBad=RM.filter(r=>r.status==='OVER'||r.status==='UNDER').length;
   document.getElementById('kpis').innerHTML=
-    kpi((100*(match+adjc)/FG.length).toFixed(0)+'%','FG items matched or adjustment-closed', match+adjc>=FG.length*0.7?'good':'warn')+
-    kpi(fmtS(netAfter),'FG net gap after adjustments (cases)', Math.abs(netAfter)<50000?'good':'warn')+
-    kpi(open,'FG items with open gaps', open===0?'good':'bad')+
-    kpi(rmInline+' / '+RM.length,'Raw materials in line with BOM','good')+
-    kpi(rmBad,'Raw materials over / under-consumed', rmBad===0?'good':'bad');
+    kpi(FG.length,'Finished goods items produced','good')+
+    kpi(fmt(totQty),'Total units produced (Sage JR+BR)','good')+
+    kpi(fmtC(totCost),'Production value (BOM cost)','good')+
+    kpi(fmtC(devCost,true),'Material consumption vs BOM ($)', Math.abs(devCost)<0.02*Math.max(thCost,1)?'good':(devCost>0?'bad':'warn'))+
+    kpi(rmBad,'Components over / under-consumed', rmBad===0?'good':'bad');
   function kpi(v,l,c){ return '<div class="kpi '+c+'"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
 
-  const segs=[['MATCH','#1b7f4d'],['ADJ CLOSED','#3a5f8a'],['ADJ PARTIAL','#a86400'],['UOM','#c9a227'],['MISSING','#b3261e'],['OPEN GAP','#7a1a14']];
+  const segs=[['IN LINE','#1b7f4d'],['MODERATE','#a86400'],['NOT CONSUMED','#c9a227'],['NO BOM DEMAND','#8a6d1a'],['UNDER','#a34b44'],['OVER','#7a1a14']];
   let g='',leg='';
-  for(const [s,col] of segs){ const n=FG.filter(r=>r.status===s).length; if(!n) continue;
-    g+='<div style="width:'+(100*n/FG.length)+'%;background:'+col+'" title="'+s+': '+n+'"></div>';
-    leg+='<span><span class="dot" style="background:'+col+'"></span>'+s+' ('+n+')</span>'; }
+  const n=RM.length||1;
+  for(const [st,col] of segs){ const k=RM.filter(r=>r.status===st).length; if(!k) continue;
+    g+='<div style="width:'+(100*k/n)+'%;background:'+col+'" title="'+st+': '+k+'"></div>';
+    leg+='<span><span class="dot" style="background:'+col+'"></span>'+st+' ('+k+')</span>'; }
   document.getElementById('gauge').innerHTML=g;
   document.getElementById('gaugeLegend').innerHTML=leg;
 
   const cats=[...new Set(FG.map(r=>r.cat))].sort();
-  document.getElementById('fgCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>'<option>'+c+'</option>').join('');
-  document.getElementById('fgStatus').innerHTML='<option value="">All statuses</option>'+Object.keys(FG_ORDER).map(s=>'<option>'+s+'</option>').join('');
-  document.getElementById('rmStatus').innerHTML='<option value="">All statuses</option>'+Object.keys(RM_ORDER).map(s=>'<option>'+s+'</option>').join('');
+  const catSel=document.getElementById('fgCat'); const keep=catSel.value;
+  catSel.innerHTML='<option value="">All categories</option>'+cats.map(c=>'<option'+(c===keep?' selected':'')+'>'+c+'</option>').join('');
+  const stSel=document.getElementById('rmStatus'); const keep2=stSel.value;
+  stSel.innerHTML='<option value="">All statuses</option>'+Object.keys(RM_ORDER).map(s=>'<option'+(s===keep2?' selected':'')+'>'+s+'</option>').join('');
   drawFG(); drawRM();
 }
 
 let fgSort={k:null,d:1}, rmSort={k:null,d:1};
 function drawFG(){
   const q=document.getElementById('fgSearch').value.toLowerCase();
-  const c=document.getElementById('fgCat').value, s=document.getElementById('fgStatus').value;
-  let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!c||r.cat===c)&&(!s||r.status===s));
-  rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (FG_ORDER[x.status]-FG_ORDER[y.status])||Math.abs(y.after)-Math.abs(x.after));
-  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['floor','Floor Produced'],['floorC','Floor Cost'],['sage','Sage (JR+BR)'],['sageC','Sage Cost'],['gap','Gap'],['adj','Adjust­ments'],['after','Gap After Adj'],['gapC','Gap Cost'],['pct','% After'],['status','Status'],['cm','Comment']];
+  const c=document.getElementById('fgCat').value;
+  let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!c||r.cat===c));
+  rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.cost-x.cost));
+  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['qty','Sage (JR+BR)'],['cost','Sage Cost']];
   document.getElementById('fgTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'fg\',\''+k+'\')">'+h+(fgSort.k===k?'<span class="arrow">'+(fgSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td style="white-space:normal;min-width:150px">'+r.desc+'</td><td>'+r.cat+'</td><td class="num">'+fmt(r.floor)+'</td><td class="num">'+fmtC(r.floorC)+'</td><td class="num">'+fmt(r.sage)+'</td><td class="num">'+fmtC(r.sageC)+'</td><td class="num">'+fmtS(r.gap)+'</td><td class="num">'+fmtS(r.adj)+'</td><td class="num"><b>'+fmtS(r.after)+'</b></td><td class="num"><b>'+fmtC(r.gapC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td class="desc">'+r.desc+'</td><td>'+r.cat+'</td><td class="num">'+fmt(r.qty)+'</td><td class="num"><b>'+fmtC(r.cost)+'</b></td></tr>').join('');
   document.getElementById('fgCount').textContent=rows.length+' of '+FG.length+' items';
 }
 function drawRM(){
   const q=document.getElementById('rmSearch').value.toLowerCase();
   const s=document.getElementById('rmStatus').value;
-  let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!s||r.status===s));
-  rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.dev)-Math.abs(x.dev));
-  const cols=[['comp','Component'],['desc','Description'],['thF','Theoretical (Floor×BOM)'],['thC','Theoretical Cost'],['act','Actual (JI+BI)'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.used.toLowerCase().includes(q))&&(!s||r.status===s));
+  rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.devC)-Math.abs(x.devC));
+  const cols=[['comp','Component'],['desc','Description'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['act','Actual (JI+BI)'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
   document.getElementById('rmTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td style="white-space:normal;min-width:150px">'+r.desc+'</td><td class="num">'+fmt(r.thF)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="desc">'+r.desc+'</td><td class="desc" style="font-size:11.5px">'+r.used+'</td><td class="num">'+fmt(r.th)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
   document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
 }
 function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
-['fgSearch','fgCat','fgStatus'].forEach(id=>document.getElementById(id).addEventListener('input',drawFG));
+['fgSearch','fgCat'].forEach(id=>document.getElementById(id).addEventListener('input',drawFG));
 ['rmSearch','rmStatus'].forEach(id=>document.getElementById(id).addEventListener('input',drawRM));
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
   t.classList.add('active'); document.getElementById(t.dataset.panel).classList.add('active');
 }));
+
 document.getElementById('btnXlsx').addEventListener('click',()=>{
-  const wTag=document.getElementById('windowTag').textContent;
-  const cnt=k=>FG.filter(r=>r.status===k).length;
+  const period=document.getElementById('windowTag').textContent;
   const rcnt=k=>RM.filter(r=>r.status===k).length;
-  const netAfter=FG.filter(r=>!UOM.has(r.item)).reduce((s,r)=>s+r.after,0);
+  const thCost=RM.reduce((s,r)=>s+r.thC,0), actCost=RM.reduce((s,r)=>s+r.actC,0);
   const summary=[
-    ['ALAMANCE FOODS, INC. — PRODUCTION vs SAGE 100 RECONCILIATION'],
+    ['ALAMANCE FOODS, INC. — SAGE 100 PRODUCTION & MATERIAL CONSUMPTION'],
     ['Prepared by Bala Pradeep Konda'],
-    [wTag],
+    [period],
     [],
-    ['FINISHED GOODS SUMMARY'],
-    ['Total items', FG.length],
-    ['Matched within 2%', cnt('MATCH')],
-    ['Closed by adjustments', cnt('ADJ CLOSED')],
-    ['Partially closed by adjustments', cnt('ADJ PARTIAL')],
-    ['Missing in Sage', cnt('MISSING')],
-    ['Open gaps', cnt('OPEN GAP')],
-    ['UOM items (flagged)', cnt('UOM')],
-    ['Net gap after adjustments (cases, excl. UOM items)', Math.round(netAfter)],
+    ['FINISHED GOODS'],
+    ['Items produced (JR+BR)', FG.length],
+    ['Total units produced', Math.round(FG.reduce((s,r)=>s+r.qty,0))],
+    ['Production value (BOM cost)', Math.round(FG.reduce((s,r)=>s+r.cost,0))],
     [],
-    ['RAW MATERIALS SUMMARY'],
-    ['Total components', RM.length],
+    ['RAW MATERIALS'],
+    ['Components', RM.length],
+    ['Theoretical cost (BOM)', Math.round(thCost)],
+    ['Actual cost (JI+BI)', Math.round(actCost)],
+    ['Deviation cost', Math.round(actCost-thCost)],
     ['In line with BOM (within 5%)', rcnt('IN LINE')],
-    ['Moderate deviation (5-15%)', rcnt('MODERATE')],
+    ['Moderate (5-15%)', rcnt('MODERATE')],
     ['Over-consumed >15%', rcnt('OVER')],
     ['Under-consumed >15%', rcnt('UNDER')],
     ['Consumed with no BOM demand', rcnt('NO BOM DEMAND')],
     ['BOM demand, nothing consumed', rcnt('NOT CONSUMED')],
-    ['UOM artifacts', rcnt('UOM ARTIFACT')],
     [],
     ['METHOD'],
-    ['Finished goods: floor-reported qty produced vs Sage JR+BR; adjustments = net IA+IZ; Gap After Adj = Gap + Adjustments.'],
-    ['Raw materials: theoretical = floor production x BOM (multi-level, no scrap, material lines only); actual = JI+BI. Adjustments intentionally not applied to raw materials.'],
-    ['Excluded lines: D line, Plantation, Worth St. UOM items A13/AA11/AX11 flagged, not judged.'],
+    ['Finished goods: Sage JR+BR production receipts; cost = qty x BOM roll-up unit cost (CI_Item LastTotalUnitCost).'],
+    ['Raw materials: theoretical = Sage production x BOM (no scrap, material lines only); actual = JI+BI issues; deviation cost = deviation x unit cost.'],
   ];
-  const fgSheet=[['Item','Description','Category','Floor Produced','Floor Cost','Sage (JR+BR)','Sage Cost','Gap','Adjustments','Gap After Adj','Gap Cost','% After','Status','Comment'],
-    ...FG.map(r=>[r.item,r.desc,r.cat,r.floor,r.floorC,r.sage,r.sageC,r.gap,r.adj,r.after,r.gapC,r.pct,r.status,r.cm])];
-  const rmSheet=[['Component','Description','Theoretical (Floor x BOM)','Theoretical Cost','Actual (JI+BI)','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
-    ...RM.map(r=>[r.comp,r.desc,r.thF,r.thC,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
+  const fgSheet=[['Item','Description','Category','Sage (JR+BR)','Sage Cost'],
+    ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.cost-x.cost)).map(r=>[r.item,r.desc,r.cat,r.qty,r.cost])];
+  const rmSheet=[['Component','Description','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','Actual (JI+BI)','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
+    ...RM.map(r=>[r.comp,r.desc,r.used,r.th,r.thC,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
   const wb=XLSX.utils.book_new();
   const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:52},{wch:14}];
-  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,30,16,14,13,14,13,12,12,14,13,9,14,70].map(w=>({wch:w}));
-  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,30,20,14,14,13,12,13,11,14,70].map(w=>({wch:w}));
+  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,32,16,14,13].map(w=>({wch:w}));
+  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,32,40,16,15,14,13,12,14,11,14,64].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s1,'Summary');
   XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
   XLSX.utils.book_append_sheet(wb,s3,'Raw Materials');
-  XLSX.writeFile(wb,'Production_vs_Sage_Reconciliation.xlsx');
+  XLSX.writeFile(wb,'Sage_Production_Material_Report'+(selDay==='ALL'?'':'_'+selDay)+'.xlsx');
 });
 </script>
 </body>
