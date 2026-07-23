@@ -14,7 +14,7 @@
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 body{font-family:"Segoe UI", -apple-system, Roboto, Arial, sans-serif; background:var(--paper); color:var(--ink); font-size:14px;}
-.wrap{max-width:1280px; margin:0 auto; padding:20px 24px 60px;}
+.wrap{max-width:1320px; margin:0 auto; padding:20px 24px 60px;}
 header{border-bottom:3px solid var(--navy); padding:14px 0 12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:8px;}
 header h1{font-size:20px; font-weight:700; letter-spacing:.2px; color:var(--navy);}
 header .sub{color:var(--steel); font-size:12.5px;}
@@ -67,7 +67,9 @@ tr:hover td{background:#f2f6fa;}
 .p-bad{background:var(--bad-bg); color:var(--bad);} .p-info{background:var(--info-bg); color:var(--info);}
 details.method{margin:18px 0 0; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 16px; font-size:12.5px; color:#37475d;}
 details.method summary{font-weight:700; color:var(--navy); cursor:pointer; font-size:13px;}
-details.method li{margin:6px 0 0 18px;}
+details.method h4{color:var(--navy); margin:12px 0 4px; font-size:12.5px;}
+details.method li{margin:5px 0 0 18px;}
+details.method td, details.method th{position:static; cursor:default;}
 #results{display:none;}
 .count{font-size:12px; color:var(--steel); margin-left:auto;}
 </style>
@@ -75,9 +77,12 @@ details.method li{margin:6px 0 0 18px;}
 <body>
 <div class="wrap">
 <header>
-  <div>
+  <div style="display:flex; align-items:center; gap:16px;">
+    <img src="data:image/jpeg;base64,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" alt="Alamance Foods" style="height:64px; width:auto;">
+    <div>
     <h1>Sage 100 Production &amp; Material Consumption</h1>
-    <div class="sub">Upload the weekly Sage item transaction extract and the BOM — everything runs in your browser.</div>
+    <div class="sub" id="subtitle">Upload the weekly Sage item transaction extract and the BOM — everything runs in your browser.</div>
+    </div>
   </div>
   <div style="text-align:right">
     <div style="font-size:15px;font-weight:800;letter-spacing:1.2px;color:var(--navy)">ALAMANCE FOODS, INC.</div>
@@ -86,7 +91,7 @@ details.method li{margin:6px 0 0 18px;}
   </div>
 </header>
 
-<div class="uploads">
+<div class="uploads" id="uploads">
   <div class="ucard">
     <h3>1 · Sage Item Transactions (.xlsx)</h3>
     <p>Weekly Item Transaction History export (all codes)</p>
@@ -101,10 +106,11 @@ details.method li{margin:6px 0 0 18px;}
   </div>
 </div>
 
-<div class="runbar">
+<div class="runbar" id="runbar">
   <button class="run" id="btnRun" disabled>Run report</button>
   <button class="ghost" id="btnClear">Clear files &amp; start over</button>
-  <button class="ghost" id="btnXlsx" style="display:none">Download full report (Excel)</button>
+  <button class="ghost" id="btnXlsx" style="display:none">Download Excel report</button>
+  <button class="ghost" id="btnSnap" style="display:none">Download shareable snapshot (HTML)</button>
   <span id="runmsg"></span>
 </div>
 
@@ -130,7 +136,7 @@ details.method li{margin:6px 0 0 18px;}
 
   <div class="panel" id="pRM">
     <div class="filters">
-      <input type="text" id="rmSearch" placeholder="Search component or description…">
+      <input type="text" id="rmSearch" placeholder="Search component, description, or finished good…">
       <select id="rmStatus"><option value="">All statuses</option></select>
       <span class="count" id="rmCount"></span>
     </div>
@@ -139,14 +145,38 @@ details.method li{margin:6px 0 0 18px;}
 </div>
 
 <details class="method">
-  <summary>Method &amp; rules baked into this report</summary>
+  <summary>Method &amp; rules — what every column means</summary>
+  <h4>Data sources</h4>
   <ul>
-    <li><b>Finished goods:</b> Sage production entries — JR (work ticket receipts) + BR (BOM production receipts) — per item for the selected day or full week. Sage Cost = quantity × unit cost (BOM roll-up: sum of all component quantities × their CI_Item LastTotalUnitCost, through every BOM level).</li>
-    <li><b>Raw materials:</b> Theoretical = Sage production × BOM QuantityPerBill (material lines only, <i>no scrap %</i>). Because bulk/batch production is itself recorded in Sage, each production level generates demand for its own components. Actual = JI (work ticket issues) + BI (backflush issues). Deviation = Actual − Theoretical; Deviation Cost = deviation × LastTotalUnitCost. Actual above theoretical includes real-world scrap and waste.</li>
-    <li><b>Day filter:</b> toggles restrict both production and consumption to that transaction date. Note: material issues sometimes post a day apart from the production receipt of the same ticket, so single-day deviations can be noisier than the full-week view.</li>
-    <li><b>Categories</b> are inferred from item code prefix: A = Aerosol, P = Pops, H = Rainbow/Drinks, W = Water 1 Gal, L = Water 2.5 Gal; everything else = Batch/Other. Finished goods list in that order, with batches always at the bottom.</li>
-    <li><b>Used In</b> shows the finished goods a component flows into for this period's production. When a component belongs to a batch, the batch is skipped and the finished goods that consume the batch are shown instead.</li>
-    <li>Nothing uploads to any server — files are read locally in the browser.</li>
+    <li><b>Sage Item Transaction History</b> — the only quantity source. Production = transaction codes <b>JR</b> (work ticket receipts) + <b>BR</b> (BOM production receipts). Material consumption = <b>JI</b> (work ticket issues) + <b>BI</b> (backflush issues). All other codes (sales, transfers, adjustments, PO receipts) are ignored.</li>
+    <li><b>Bill of Materials</b> — BM_BillDetail gives the standard quantity of each component per unit produced (material lines only; labor/overhead lines excluded; <b>scrap % intentionally NOT applied</b>). CI_Item gives each item's description and LastTotalUnitCost.</li>
+  </ul>
+  <h4>Finished Goods Produced tab — column by column</h4>
+  <ul>
+    <li><b>Sage (JR+BR)</b> — units of this item Sage says were produced in the selected period.</li>
+    <li><b>Std Unit Cost (BOM)</b> — the standard material cost to make ONE unit (BOM roll-up). <b>Actual Unit Cost</b> — the real material cost per unit this period: allocated actual cost ÷ units produced. Compare the two to see the per-unit impact.</li>
+    <li><b>Theoretical Cost</b> — what those units <i>should</i> have cost in materials: units × BOM standard cost (the BOM roll-up: every component quantity × its unit cost, through every BOM level).</li>
+    <li><b>Actual Cost (Materials)</b> — what the materials <i>actually</i> consumed for this item cost. Each component's real JI+BI consumption is allocated to the finished goods that required it (in proportion to their BOM demand), so if cans ran 13-per-case but sugar ran even higher, each shows up at its own real rate. Batch over-consumption flows through: a batch's real material cost per unit replaces its standard cost when valuing the finished goods that use it.</li>
+    <li><b>Cost Variance</b> — Actual − Theoretical. Positive = materials cost more than BOM standard (scrap, waste, overfill); negative = less was consumed/posted than standard.</li>
+    <li><b>Var %</b> — Cost Variance ÷ Theoretical Cost.</li>
+    <li>Ordering: Aerosol → Pops → Rainbow/Drinks → Water 1 Gal → Water 2.5 Gal → Batches always last. Categories inferred from item code prefix (A, P, H, W, L).</li>
+  </ul>
+  <h4>Raw Material Consumption tab — column by column</h4>
+  <ul>
+    <li><b>Unit Cost</b> — the component's LastTotalUnitCost from CI_Item, used for all dollar columns on this tab.</li>
+    <li><b>Used In (Finished Goods)</b> — the finished goods this component flowed into this period. Batches are skipped: components of a batch show the finished goods that consume the batch.</li>
+    <li><b>Theoretical (BOM)</b> — Sage production × BOM quantity per unit. Example: 100 cases produced × 12 cans = 1,200 cans expected.</li>
+    <li><b>Theoretical Cost</b> — Theoretical qty × unit cost (CI_Item LastTotalUnitCost).</li>
+    <li><b>Actual (JI+BI)</b> — what the team actually posted as consumed (e.g., 1,300 cans including scrap and other real-world factors).</li>
+    <li><b>Actual Cost</b> — Actual qty × unit cost.</li>
+    <li><b>Deviation / Deviation Cost / Deviation %</b> — Actual − Theoretical, in units, dollars, and percent. Because scrap is not in the theoretical, a healthy line runs slightly positive — that overage IS the real scrap/waste cost.</li>
+    <li><b>Status</b> — IN LINE ≤5% · MODERATE 5–15% · OVER &gt;15% · UNDER &lt;−15% · NO BOM DEMAND (consumed but no produced item calls for it) · NOT CONSUMED (BOM demand but nothing posted).</li>
+  </ul>
+  <h4>Other rules</h4>
+  <ul>
+    <li><b>Day filter</b> restricts both production and consumption to that transaction date. Issues sometimes post a day apart from their production receipt, so single days run noisier than the full week — judge on the week, drill down by day.</li>
+    <li>Consumption with no BOM demand cannot be attributed to any finished good, so it appears on the Raw Materials tab but not inside any item's Actual Cost.</li>
+    <li>Nothing uploads to any server — files are read locally in the browser. The shareable snapshot embeds the computed data so viewers need no files.</li>
   </ul>
 </details>
 </div>
@@ -162,6 +192,7 @@ function fmt(n){ return n==null?'':Math.round(n).toLocaleString('en-US'); }
 function fmtS(n){ const r=Math.round(n); return (r>0?'+':'')+r.toLocaleString('en-US'); }
 function fmtP(p){ return p==null?'—':(p>0?'+':'')+(p*100).toFixed(1)+'%'; }
 function fmtC(n,signed){ if(n==null) return '—'; const v=Math.round(n); const sign=v<0?'-':(v>0&&signed?'+':''); return sign+'$'+Math.abs(v).toLocaleString('en-US'); }
+function fmtU(n){ if(n==null) return '—'; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function catOf(it){ const c=it[0]?it[0].toUpperCase():''; return c==='A'?'Aerosol':c==='P'?'Pops':c==='H'?'Rainbow / Drinks':c==='W'?'Water 1 Gal':c==='L'?'Water 2.5 Gal':'Batch / Other'; }
 const CAT_ORDER={'Aerosol':0,'Pops':1,'Rainbow / Drinks':2,'Water 1 Gal':3,'Water 2.5 Gal':4,'Batch / Other':5};
 
@@ -205,13 +236,14 @@ function ready(){ document.getElementById('btnRun').disabled = !(txnRows&&bomRow
 document.getElementById('btnClear').addEventListener('click',()=>{
   txnRows=null; bomRows=null; FG=[]; RM=[]; dates=[]; selDay='ALL';
   itemMaster=new Map(); itemCost=new Map();
-  for(const id of ['fTxn','fBom']) document.getElementById(id).value='';
+  for(const id of ['fTxn','fBom']){ const el=document.getElementById(id); if(el) el.value=''; }
   document.getElementById('sTxn').className='ustat'; document.getElementById('sTxn').textContent='No file loaded';
   document.getElementById('sBom').className='ustat'; document.getElementById('sBom').textContent='No file loaded';
   document.getElementById('results').style.display='none';
   document.getElementById('daybar').style.display='none';
   document.getElementById('windowTag').style.display='none';
   document.getElementById('btnXlsx').style.display='none';
+  document.getElementById('btnSnap').style.display='none';
   document.getElementById('runmsg').textContent='';
   ready();
 });
@@ -222,12 +254,10 @@ document.getElementById('btnRun').addEventListener('click', ()=>{
 });
 
 function prepare(){
-  // BOM maps + cost roll-up
   children=new Map(); costMemo=new Map();
   const agg=new Map();
   for(const r of bomRows){ const k=r.bill+'||'+r.comp; agg.set(k,(agg.get(k)||0)+r.qty); if(r.desc&&!itemMaster.has(r.comp)) itemMaster.set(r.comp,r.desc); }
   for(const [k,q] of agg){ const [b,c]=k.split('||'); if(!children.has(b)) children.set(b,[]); children.get(b).push([c,q]); }
-  // day list (dates with production or consumption)
   const dset=new Set();
   for(const r of txnRows){ if(r.code==='JR'||r.code==='BR'||r.code==='JI'||r.code==='BI') dset.add(dstr(r.date)); }
   dates=[...dset].sort();
@@ -265,20 +295,45 @@ function compute(){
     else if(r.code==='JI'||r.code==='BI') cons.set(r.item,(cons.get(r.item)||0)-r.qty);
   }
 
-  // Finished goods
+  // demand maps
+  const demand=new Map(), totalDemand=new Map(), directParents=new Map();
+  for(const [p,q] of prod){ if(q<=0) continue; const ch=children.get(p); if(!ch) continue;
+    const dm=new Map(); demand.set(p,dm);
+    for(const [c,per] of ch){ const d=q*per; dm.set(c,d); totalDemand.set(c,(totalDemand.get(c)||0)+d);
+      if(!directParents.has(c)) directParents.set(c,new Set()); directParents.get(c).add(p); } }
+
+  // actual unit cost of a consumed component: batches carry their real material cost per unit
+  const actUCmemo=new Map();
+  function actualUnitCost(item,depth){
+    if(depth>8) return itemCost.get(item)!=null?itemCost.get(item):unitCost(item,0);
+    if(actUCmemo.has(item)) return actUCmemo.get(item);
+    let v;
+    const isProducedBatch = catOf(item)==='Batch / Other' && (prod.get(item)||0)>0 && children.has(item);
+    if(isProducedBatch){
+      let tot=0; const dm=demand.get(item);
+      if(dm) for(const [c,d] of dm){ const td=totalDemand.get(c)||0; const share=td>0?d/td:0;
+        tot += share*(cons.get(c)||0)*actualUnitCost(c,depth+1); }
+      v = tot>0 ? tot/prod.get(item) : (itemCost.get(item)!=null&&itemCost.get(item)>0?itemCost.get(item):unitCost(item,0));
+    } else {
+      v = itemCost.get(item)!=null&&itemCost.get(item)>0?itemCost.get(item):unitCost(item,0);
+    }
+    actUCmemo.set(item,v); return v;
+  }
+
+  // Finished goods with theoretical + allocated actual material cost
   FG=[];
   for(const [it,q] of [...prod.entries()].sort()){
     if(q===0) continue;
     const u=unitCost(it,0);
-    FG.push({item:it, desc:itemMaster.get(it)||'', cat:catOf(it), qty:q, cost:q*u});
+    let actC=0; const dm=demand.get(it);
+    if(dm) for(const [c,d] of dm){ const td=totalDemand.get(c)||0; const share=td>0?d/td:0;
+      actC += share*(cons.get(c)||0)*actualUnitCost(c,0); }
+    const thC=q*u;
+    const varC=actC-thC;
+    FG.push({item:it, desc:itemMaster.get(it)||'', cat:catOf(it), qty:q, uStd:u, uAct:q>0?actC/q:null, thC, actC, varC, pct:thC>0?varC/thC:null});
   }
 
-  // Raw materials: theoretical from production x BOM (single level per produced item)
-  const th=new Map(), directParents=new Map();
-  for(const [it,q] of prod){ if(q<=0) continue; const ch=children.get(it); if(!ch) continue;
-    for(const [c,per] of ch){ th.set(c,(th.get(c)||0)+q*per);
-      if(!directParents.has(c)) directParents.set(c,new Set()); directParents.get(c).add(it); } }
-  // resolve a produced parent to finished goods (skip batches by climbing to produced FG users)
+  // Used-In resolution
   const fgResolveMemo=new Map();
   function resolveFG(p,depth){
     if(depth>6) return [p];
@@ -301,12 +356,14 @@ function compute(){
     const arr=[...set].sort((a,b)=>(CAT_ORDER[catOf(a)]-CAT_ORDER[catOf(b)])||a.localeCompare(b));
     return arr.length>8 ? arr.slice(0,8).join(', ')+' +'+(arr.length-8)+' more' : arr.join(', ');
   }
+
+  // Raw materials
   RM=[];
-  const comps=new Set([...th.keys(),...cons.keys()]);
+  const comps=new Set([...totalDemand.keys(),...cons.keys()]);
   for(const c of [...comps].sort()){
-    const e=th.get(c)||0, a=cons.get(c)||0;
+    const e=totalDemand.get(c)||0, a=cons.get(c)||0;
     if(Math.abs(e)<1e-6 && Math.abs(a)<1e-6) continue;
-    const u=itemCost.get(c)!=null?itemCost.get(c):unitCost(c,0);
+    const u=itemCost.get(c)!=null&&itemCost.get(c)>0?itemCost.get(c):unitCost(c,0);
     const dev=a-e; let pct=e>0?dev/e:null, status, cm;
     if(e===0){ status='NO BOM DEMAND'; cm='Consumed with no BOM demand from any produced item — check BOM completeness or mis-issue.'; }
     else if(a===0){ status='NOT CONSUMED'; cm='BOM demand but zero consumption recorded — non-inventory item or issue not posted.'; }
@@ -314,7 +371,7 @@ function compute(){
     else if(pct>0.15){ status='OVER'; cm='Over-consumed '+fmtP(pct)+' vs BOM — scrap/waste above standard or BOM understated.'; }
     else if(pct<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(pct)+' vs BOM — issues not fully posted or BOM overstated.'; }
     else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
-    RM.push({comp:c, desc:itemMaster.get(c)||'', used:usedInList(c), th:e, thC:e*u, act:a, actC:a*u, dev, devC:dev*u, pct, status, cm});
+    RM.push({comp:c, desc:itemMaster.get(c)||'', unit:u, used:usedInList(c), th:e, thC:e*u, act:a, actC:a*u, dev, devC:dev*u, pct, status, cm});
   }
   render();
 }
@@ -328,15 +385,17 @@ function pill(s){
 function render(){
   document.getElementById('results').style.display='block';
   document.getElementById('btnXlsx').style.display='inline-block';
-  const totQty=FG.reduce((s,r)=>s+r.qty,0), totCost=FG.reduce((s,r)=>s+r.cost,0);
-  const thCost=RM.reduce((s,r)=>s+r.thC,0), actCost=RM.reduce((s,r)=>s+r.actC,0);
-  const devCost=actCost-thCost;
+  document.getElementById('btnSnap').style.display='inline-block';
+  const totQty=FG.reduce((s,r)=>s+r.qty,0);
+  const thCost=FG.reduce((s,r)=>s+r.thC,0), actCost=FG.reduce((s,r)=>s+r.actC,0);
+  const varCost=actCost-thCost;
   const rmBad=RM.filter(r=>r.status==='OVER'||r.status==='UNDER').length;
   document.getElementById('kpis').innerHTML=
-    kpi(FG.length,'Finished goods items produced','good')+
-    kpi(fmt(totQty),'Total units produced (Sage JR+BR)','good')+
-    kpi(fmtC(totCost),'Production value (BOM cost)','good')+
-    kpi(fmtC(devCost,true),'Material consumption vs BOM ($)', Math.abs(devCost)<0.02*Math.max(thCost,1)?'good':(devCost>0?'bad':'warn'))+
+    kpi(FG.length,'Items produced (Sage JR+BR)','good')+
+    kpi(fmt(totQty),'Total units produced','good')+
+    kpi(fmtC(thCost),'Theoretical material cost (BOM)','good')+
+    kpi(fmtC(actCost),'Actual material cost (JI+BI)', varCost>0.02*Math.max(thCost,1)?'warn':'good')+
+    kpi(fmtC(varCost,true),'Cost variance (actual - BOM)', Math.abs(varCost)<0.02*Math.max(thCost,1)?'good':(varCost>0?'bad':'warn'))+
     kpi(rmBad,'Components over / under-consumed', rmBad===0?'good':'bad');
   function kpi(v,l,c){ return '<div class="kpi '+c+'"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
 
@@ -349,7 +408,7 @@ function render(){
   document.getElementById('gauge').innerHTML=g;
   document.getElementById('gaugeLegend').innerHTML=leg;
 
-  const cats=[...new Set(FG.map(r=>r.cat))].sort();
+  const cats=[...new Set(FG.map(r=>r.cat))].sort((a,b)=>CAT_ORDER[a]-CAT_ORDER[b]);
   const catSel=document.getElementById('fgCat'); const keep=catSel.value;
   catSel.innerHTML='<option value="">All categories</option>'+cats.map(c=>'<option'+(c===keep?' selected':'')+'>'+c+'</option>').join('');
   const stSel=document.getElementById('rmStatus'); const keep2=stSel.value;
@@ -362,11 +421,11 @@ function drawFG(){
   const q=document.getElementById('fgSearch').value.toLowerCase();
   const c=document.getElementById('fgCat').value;
   let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!c||r.cat===c));
-  rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.cost-x.cost));
-  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['qty','Sage (JR+BR)'],['cost','Sage Cost']];
+  rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC));
+  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['uStd','Std Unit Cost (BOM)'],['uAct','Actual Unit Cost'],['qty','Sage (JR+BR)'],['thC','Theoretical Cost'],['actC','Actual Cost (Materials)'],['varC','Cost Variance'],['pct','Var %']];
   document.getElementById('fgTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'fg\',\''+k+'\')">'+h+(fgSort.k===k?'<span class="arrow">'+(fgSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td class="desc">'+r.desc+'</td><td>'+r.cat+'</td><td class="num">'+fmt(r.qty)+'</td><td class="num"><b>'+fmtC(r.cost)+'</b></td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td class="desc">'+r.desc+'</td><td>'+r.cat+'</td><td class="num">'+fmtU(r.uStd)+'</td><td class="num">'+fmtU(r.uAct)+'</td><td class="num">'+fmt(r.qty)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtC(r.varC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td></tr>').join('');
   document.getElementById('fgCount').textContent=rows.length+' of '+FG.length+' items';
 }
 function drawRM(){
@@ -374,10 +433,10 @@ function drawRM(){
   const s=document.getElementById('rmStatus').value;
   let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.used.toLowerCase().includes(q))&&(!s||r.status===s));
   rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.devC)-Math.abs(x.devC));
-  const cols=[['comp','Component'],['desc','Description'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['act','Actual (JI+BI)'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  const cols=[['comp','Component'],['desc','Description'],['unit','Unit Cost'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['act','Actual (JI+BI)'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
   document.getElementById('rmTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="desc">'+r.desc+'</td><td class="desc" style="font-size:11.5px">'+r.used+'</td><td class="num">'+fmt(r.th)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="desc">'+r.desc+'</td><td class="num">'+fmtU(r.unit)+'</td><td class="desc" style="font-size:11.5px">'+r.used+'</td><td class="num">'+fmt(r.th)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
   document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
 }
 function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
@@ -392,7 +451,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
 document.getElementById('btnXlsx').addEventListener('click',()=>{
   const period=document.getElementById('windowTag').textContent;
   const rcnt=k=>RM.filter(r=>r.status===k).length;
-  const thCost=RM.reduce((s,r)=>s+r.thC,0), actCost=RM.reduce((s,r)=>s+r.actC,0);
+  const thCost=FG.reduce((s,r)=>s+r.thC,0), actCost=FG.reduce((s,r)=>s+r.actC,0);
   const summary=[
     ['ALAMANCE FOODS, INC. — SAGE 100 PRODUCTION & MATERIAL CONSUMPTION'],
     ['Prepared by Bala Pradeep Konda'],
@@ -401,13 +460,12 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
     ['FINISHED GOODS'],
     ['Items produced (JR+BR)', FG.length],
     ['Total units produced', Math.round(FG.reduce((s,r)=>s+r.qty,0))],
-    ['Production value (BOM cost)', Math.round(FG.reduce((s,r)=>s+r.cost,0))],
+    ['Theoretical material cost (BOM)', Math.round(thCost)],
+    ['Actual material cost (allocated JI+BI)', Math.round(actCost)],
+    ['Cost variance', Math.round(actCost-thCost)],
     [],
     ['RAW MATERIALS'],
     ['Components', RM.length],
-    ['Theoretical cost (BOM)', Math.round(thCost)],
-    ['Actual cost (JI+BI)', Math.round(actCost)],
-    ['Deviation cost', Math.round(actCost-thCost)],
     ['In line with BOM (within 5%)', rcnt('IN LINE')],
     ['Moderate (5-15%)', rcnt('MODERATE')],
     ['Over-consumed >15%', rcnt('OVER')],
@@ -415,23 +473,57 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
     ['Consumed with no BOM demand', rcnt('NO BOM DEMAND')],
     ['BOM demand, nothing consumed', rcnt('NOT CONSUMED')],
     [],
-    ['METHOD'],
-    ['Finished goods: Sage JR+BR production receipts; cost = qty x BOM roll-up unit cost (CI_Item LastTotalUnitCost).'],
-    ['Raw materials: theoretical = Sage production x BOM (no scrap, material lines only); actual = JI+BI issues; deviation cost = deviation x unit cost.'],
+    ['METHOD (short)'],
+    ['Production = Sage JR+BR. Consumption = JI+BI. Theoretical = production x BOM (no scrap). Costs from CI_Item LastTotalUnitCost; finished-good standard cost = multi-level BOM roll-up.'],
+    ['FG Actual Cost = each component\'s real consumption allocated to the finished goods that required it, with batch over-consumption flowing through to the goods that use the batch.'],
   ];
-  const fgSheet=[['Item','Description','Category','Sage (JR+BR)','Sage Cost'],
-    ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.cost-x.cost)).map(r=>[r.item,r.desc,r.cat,r.qty,r.cost])];
-  const rmSheet=[['Component','Description','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','Actual (JI+BI)','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
-    ...RM.map(r=>[r.comp,r.desc,r.used,r.th,r.thC,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
+  const fgSheet=[['Item','Description','Category','Std Unit Cost (BOM)','Actual Unit Cost','Sage (JR+BR)','Theoretical Cost','Actual Cost (Materials)','Cost Variance','Var %'],
+    ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC)).map(r=>[r.item,r.desc,r.cat,r.uStd,r.uAct,r.qty,r.thC,r.actC,r.varC,r.pct])];
+  const rmSheet=[['Component','Description','Unit Cost','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','Actual (JI+BI)','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
+    ...RM.map(r=>[r.comp,r.desc,r.unit,r.used,r.th,r.thC,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
   const wb=XLSX.utils.book_new();
-  const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:52},{wch:14}];
-  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,32,16,14,13].map(w=>({wch:w}));
-  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,32,40,16,15,14,13,12,14,11,14,64].map(w=>({wch:w}));
+  const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:60},{wch:14}];
+  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,32,16,15,15,14,16,20,14,9].map(w=>({wch:w}));
+  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,32,11,40,16,15,14,13,12,14,11,14,64].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s1,'Summary');
   XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
   XLSX.utils.book_append_sheet(wb,s3,'Raw Materials');
   XLSX.writeFile(wb,'Sage_Production_Material_Report'+(selDay==='ALL'?'':'_'+selDay)+'.xlsx');
 });
+
+// ---- Shareable snapshot: embeds compact data into a copy of this page ----
+document.getElementById('btnSnap').addEventListener('click',()=>{
+  const tx=txnRows.filter(r=>['JR','BR','JI','BI'].includes(r.code)).map(r=>[r.item,dstr(r.date),r.code,r.qty]);
+  const bm=bomRows.map(r=>[r.bill,r.comp,r.qty]);
+  const need=new Set(); for(const t of tx) need.add(t[0]); for(const b of bm){ need.add(b[0]); need.add(b[1]); }
+  const im=[]; for(const [k,v] of itemMaster) if(need.has(k)) im.push([k,v]);
+  const ic=[]; for(const [k,v] of itemCost) if(need.has(k)) ic.push([k,v]);
+  const payload=JSON.stringify({tx,bm,im,ic}).replace(/<\//g,'<\\/');
+  let src='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  src=src.replace('<script src=','<script>window.EMBEDDED='+payload+';<\/script>\n<script src=');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([src],{type:'text/html'}));
+  a.download='Sage_Production_Material_Dashboard_Snapshot.html'; a.click();
+  document.getElementById('runmsg').textContent='Snapshot downloaded — send that file to anyone; it opens with the data built in, no uploads needed.';
+});
+
+// ---- Embedded mode (snapshot files) ----
+if(window.EMBEDDED){
+  document.getElementById('uploads').style.display='none';
+  document.getElementById('btnRun').style.display='none';
+  document.getElementById('btnClear').style.display='none';
+  document.getElementById('btnSnap').style.display='none';
+  document.getElementById('subtitle').textContent='Interactive snapshot — data embedded; use the day toggles, filters, and Excel download.';
+  window.addEventListener('load',()=>{
+    try{
+      txnRows=window.EMBEDDED.tx.map(t=>({item:t[0], date:new Date(t[1]+'T00:00:00Z'), code:t[2], qty:t[3]}));
+      bomRows=window.EMBEDDED.bm.map(b=>({bill:b[0], comp:b[1], qty:b[2], desc:''}));
+      itemMaster=new Map(window.EMBEDDED.im); itemCost=new Map(window.EMBEDDED.ic);
+      prepare(); compute();
+      document.getElementById('btnSnap').style.display='none';
+    }catch(e){ document.getElementById('runmsg').textContent='Error loading embedded data: '+e.message; }
+  });
+}
 </script>
 </body>
 </html>
