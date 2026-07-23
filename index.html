@@ -168,7 +168,7 @@ details.method td, details.method th{position:static; cursor:default;}
     <li><b>Used In (Finished Goods)</b> — the finished goods this component flowed into this period. Batches are skipped: components of a batch show the finished goods that consume the batch.</li>
     <li><b>Theoretical (BOM)</b> — Sage production × BOM quantity per unit. Example: 100 cases produced × 12 cans = 1,200 cans expected.</li>
     <li><b>Theoretical Cost</b> — Theoretical qty × unit cost (CI_Item LastTotalUnitCost).</li>
-    <li><b>Actual (JI+BI)</b> — what the team actually posted as consumed (e.g., 1,300 cans including scrap and other real-world factors), plus any internal adjustments (IA) on the material.</li>
+    <li><b>JI+BI Issues / Adjustments (IA) / Total Actual</b> — posted consumption, plus internal adjustments on the material shown in their own column (a negative on-hand adjustment = material that left stock without an issue entry, so it counts as consumption), and their sum. Deviation, costs, and status all use Total Actual. IA on items that are themselves produced (finished goods, batches) is netted on the production side instead, so nothing is counted twice.</li>
     <li><b>Actual Cost</b> — Actual qty × unit cost.</li>
     <li><b>Deviation / Deviation Cost / Deviation %</b> — Actual − Theoretical, in units, dollars, and percent. Because scrap is not in the theoretical, a healthy line runs slightly positive — that overage IS the real scrap/waste cost.</li>
     <li><b>Status</b> — IN LINE ≤5% · MODERATE 5–15% · OVER &gt;15% · UNDER &lt;−15% · NO BOM DEMAND (consumed but no produced item calls for it) · NOT CONSUMED (BOM demand but nothing posted).</li>
@@ -303,11 +303,12 @@ function compute(){
     else if(r.code==='JI'||r.code==='BI') jibi.set(r.item,(jibi.get(r.item)||0)-r.qty);
     else if(r.code==='IA') iaMap.set(r.item,(iaMap.get(r.item)||0)+r.qty);
   }
-  const prod=new Map(jrbr), cons=new Map(jibi);
+  const prod=new Map(jrbr), cons=new Map(jibi), consIA=new Map();
   for(const [it,q] of iaMap){
     if(everProduced.has(it)) prod.set(it,(prod.get(it)||0)+q);
-    else cons.set(it,(cons.get(it)||0)-q);
+    else consIA.set(it,(consIA.get(it)||0)-q);
   }
+  const totalCons=c=>(cons.get(c)||0)+(consIA.get(c)||0);
 
   // demand maps
   const demand=new Map(), totalDemand=new Map(), directParents=new Map();
@@ -326,7 +327,7 @@ function compute(){
     if(isProducedBatch){
       let tot=0; const dm=demand.get(item);
       if(dm) for(const [c,d] of dm){ const td=totalDemand.get(c)||0; const share=td>0?d/td:0;
-        tot += share*(cons.get(c)||0)*actualUnitCost(c,depth+1); }
+        tot += share*totalCons(c)*actualUnitCost(c,depth+1); }
       v = tot>0 ? tot/prod.get(item) : (itemCost.get(item)!=null&&itemCost.get(item)>0?itemCost.get(item):unitCost(item,0));
     } else {
       v = itemCost.get(item)!=null&&itemCost.get(item)>0?itemCost.get(item):unitCost(item,0);
@@ -341,7 +342,7 @@ function compute(){
     const u=unitCost(it,0);
     let actC=0; const dm=demand.get(it);
     if(dm) for(const [c,d] of dm){ const td=totalDemand.get(c)||0; const share=td>0?d/td:0;
-      actC += share*(cons.get(c)||0)*actualUnitCost(c,0); }
+      actC += share*totalCons(c)*actualUnitCost(c,0); }
     const thC=q*u;
     const varC=actC-thC;
     const lset=lots.get(it); let lotStr='';
@@ -375,9 +376,9 @@ function compute(){
 
   // Raw materials
   RM=[];
-  const comps=new Set([...totalDemand.keys(),...cons.keys()]);
+  const comps=new Set([...totalDemand.keys(),...cons.keys(),...consIA.keys()]);
   for(const c of [...comps].sort()){
-    const e=totalDemand.get(c)||0, a=cons.get(c)||0;
+    const e=totalDemand.get(c)||0, aJIBI=cons.get(c)||0, aIA=consIA.get(c)||0, a=aJIBI+aIA;
     if(Math.abs(e)<1e-6 && Math.abs(a)<1e-6) continue;
     const u=itemCost.get(c)!=null&&itemCost.get(c)>0?itemCost.get(c):unitCost(c,0);
     const dev=a-e; let pct=e>0?dev/e:null, status, cm;
@@ -387,7 +388,7 @@ function compute(){
     else if(pct>0.15){ status='OVER'; cm='Over-consumed '+fmtP(pct)+' vs BOM — scrap/waste above standard or BOM understated.'; }
     else if(pct<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(pct)+' vs BOM — issues not fully posted or BOM overstated.'; }
     else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
-    RM.push({comp:c, desc:itemMaster.get(c)||'', unit:u, used:usedInList(c), th:e, thC:e*u, act:a, actC:a*u, dev, devC:dev*u, pct, status, cm});
+    RM.push({comp:c, desc:itemMaster.get(c)||'', unit:u, used:usedInList(c), th:e, thC:e*u, actJ:aJIBI, actIA:aIA, act:a, actC:a*u, dev, devC:dev*u, pct, status, cm});
   }
   render();
 }
@@ -449,10 +450,10 @@ function drawRM(){
   const s=document.getElementById('rmStatus').value;
   let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.used.toLowerCase().includes(q))&&(!s||r.status===s));
   rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.devC)-Math.abs(x.devC));
-  const cols=[['comp','Component'],['desc','Description'],['unit','Unit Cost'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['act','Actual (JI+BI)'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  const cols=[['comp','Component'],['desc','Description'],['unit','Unit Cost'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['actJ','JI+BI Issues'],['actIA','Adjustments (IA)'],['act','Total Actual'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
   document.getElementById('rmTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="desc">'+r.desc+'</td><td class="num">'+fmtU(r.unit)+'</td><td class="desc" style="font-size:11.5px">'+r.used+'</td><td class="num">'+fmt(r.th)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="desc">'+r.desc+'</td><td class="num">'+fmtU(r.unit)+'</td><td class="desc" style="font-size:11.5px">'+r.used+'</td><td class="num">'+fmt(r.th)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.actJ)+'</td><td class="num">'+fmtS(r.actIA)+'</td><td class="num"><b>'+fmt(r.act)+'</b></td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
   document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
 }
 function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
@@ -495,12 +496,12 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
   ];
   const fgSheet=[['Item','Description','Category','Lot / Work Ticket(s)','Std Unit Cost (BOM)','Actual Unit Cost','Sage Net (JR+BR+IA)','Theoretical Cost','Actual Cost (Materials)','Cost Variance','Var %'],
     ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC)).map(r=>[r.item,r.desc,r.cat,r.lot,r.uStd,r.uAct,r.qty,r.thC,r.actC,r.varC,r.pct])];
-  const rmSheet=[['Component','Description','Unit Cost','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','Actual (JI+BI)','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
-    ...RM.map(r=>[r.comp,r.desc,r.unit,r.used,r.th,r.thC,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
+  const rmSheet=[['Component','Description','Unit Cost','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','JI+BI Issues','Adjustments (IA)','Total Actual','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
+    ...RM.map(r=>[r.comp,r.desc,r.unit,r.used,r.th,r.thC,r.actJ,r.actIA,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
   const wb=XLSX.utils.book_new();
   const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:60},{wch:14}];
   const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,32,16,34,15,15,16,16,20,14,9].map(w=>({wch:w}));
-  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,32,11,40,16,15,14,13,12,14,11,14,64].map(w=>({wch:w}));
+  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,32,11,40,16,15,13,14,13,13,12,14,11,14,64].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s1,'Summary');
   XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
   XLSX.utils.book_append_sheet(wb,s3,'Raw Materials');
