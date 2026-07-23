@@ -96,7 +96,7 @@ details.method li{margin:6px 0 0 18px;}
   </div>
   <div class="ucard">
     <h3>3 · Bill of Materials (.xlsx)</h3>
-    <p>BM_BillDetail export</p>
+    <p>BM_BillDetail + CI_Item (descriptions)</p>
     <input type="file" id="fBom" accept=".xlsx,.xlsm">
     <div class="ustat" id="sBom">No file loaded</div>
   </div>
@@ -146,6 +146,7 @@ details.method li{margin:6px 0 0 18px;}
     <li><b>Raw materials:</b> theoretical = floor production × BOM (multi-level explosion, <i>no scrap %</i>, material lines only); Actual = JI + BI issues. Deviation = Actual − Theoretical (Floor×BOM). Adjustments are applied to finished goods only.</li>
     <li><b>Comparison window</b> = overlap of the production dates and the transaction dates, computed automatically from the files.</li>
     <li><b>Excluded item lines:</b> D line, Plantation, Worth St (not item codes).</li>
+    <li><b>Costs:</b> raw material cost = qty × LastTotalUnitCost from CI_Item. Finished-goods / batch unit cost = BOM roll-up (sum of all component quantities × their unit costs, through every BOM level). Deviation Cost = deviation qty × unit cost.</li>
     <li><b>Known UOM items</b> (A13, AA11, AX11) are flagged, not judged.</li>
     <li>Nothing uploads to any server — files are read locally in the browser.</li>
   </ul>
@@ -157,13 +158,14 @@ const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunda
 const BLOCKS=[['Aerosol','B','C'],['Pops','I','J'],['Rainbow / Drinks','O','Q'],['Gallon (1 Gal)','X','Z'],['2.5 Gallon','AG','AI']];
 const EXCLUDE=new Set(['D line','Plantation','Worth St']);
 const UOM=new Set(['A13','AA11','AX11']);
-let prodRows=null, txnRows=null, bomRows=null, FG=[], RM=[];
+let prodRows=null, txnRows=null, bomRows=null, FG=[], RM=[], itemMaster=new Map(), itemCost=new Map();
 
 function serialToDate(v){ if(v instanceof Date) return v; if(typeof v==='number'&&v>20000&&v<80000){return new Date(Date.UTC(1899,11,30)+v*86400000);} const d=new Date(v); return isNaN(d)?null:d; }
 function dstr(d){ return d.toISOString().slice(0,10); }
 function fmt(n){ return n==null?'':Math.round(n).toLocaleString('en-US'); }
 function fmtS(n){ const r=Math.round(n); return (r>0?'+':'')+r.toLocaleString('en-US'); }
 function fmtP(p){ return p==null?'—':(p>0?'+':'')+(p*100).toFixed(1)+'%'; }
+function fmtC(n){ if(n==null) return '—'; const v=Math.round(n); const sign=v<0?'-':(v>0&&arguments[1]?'+':''); return sign+'$'+Math.abs(v).toLocaleString('en-US'); }
 
 function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false})); r.onerror=rej; r.readAsArrayBuffer(file); }); }
 
@@ -217,7 +219,14 @@ document.getElementById('fBom').addEventListener('change', async e=>{
     const js=XLSX.utils.sheet_to_json(wb.Sheets[name],{raw:true});
     bomRows=js.filter(r=>Number(r.ItemType)===1).map(r=>({bill:String(r.BillNo||'').trim(), comp:String(r.ComponentItemCode||'').trim(), qty:Number(r.QuantityPerBill)||0, desc:r.ComponentDesc?String(r.ComponentDesc):''}))
       .filter(r=>r.bill&&r.comp);
-    st.className='ustat ok'; st.textContent=`${bomRows.length.toLocaleString()} material lines · ${new Set(bomRows.map(r=>r.bill)).size.toLocaleString()} bills`;
+    itemMaster=new Map(); itemCost=new Map();
+    if(wb.SheetNames.includes('CI_Item')){
+      const ci=XLSX.utils.sheet_to_json(wb.Sheets['CI_Item'],{raw:true});
+      for(const r of ci){ const code=String(r.ItemCode||'').trim(); if(!code) continue;
+        if(r.ItemCodeDesc) itemMaster.set(code,String(r.ItemCodeDesc));
+        if(r.LastTotalUnitCost!=null) itemCost.set(code,Number(r.LastTotalUnitCost)||0); }
+    }
+    st.className='ustat ok'; st.textContent=`${bomRows.length.toLocaleString()} material lines · ${new Set(bomRows.map(r=>r.bill)).size.toLocaleString()} bills · ${itemMaster.size.toLocaleString()} item descriptions`;
   }catch(err){ bomRows=null; st.className='ustat err'; st.textContent='Could not read — expected BM_BillDetail with BillNo / ComponentItemCode / QuantityPerBill'; }
   ready();
 });
@@ -259,7 +268,7 @@ function compute(){
     else if(Math.abs(after)<Math.abs(gap)*0.35){ status='ADJ CLOSED'; cm='Adjustments substantially close the gap — posting error corrected via IA/IZ.'; }
     else if(Math.abs(after)<Math.abs(gap)){ status='ADJ PARTIAL'; cm='Adjustments partially close the gap.'; }
     else { status='OPEN GAP'; cm='Gap not explained by adjustments — investigate the production entries.'; }
-    FG.push({item:it, cat:cat.get(it), floor:a, sage:b, gap, adj:ad, after, pct:a?after/a:null, status, cm});
+    FG.push({item:it, desc:itemMaster.get(it)||'', cat:cat.get(it), floor:a, sage:b, gap, adj:ad, after, pct:a?after/a:null, status, cm});
   }
 
   // ---- Raw materials ----
@@ -290,8 +299,21 @@ function compute(){
       else if(pct<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(pct)+' vs BOM — unposted issues or BOM overstated.'; }
       else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
     }
-    RM.push({comp:c, thF:ef, thS:es, act:a, dev, pct, status, cm});
+    RM.push({comp:c, desc:itemMaster.get(c)||desc.get(c)||'', thF:ef, thS:es, act:a, dev, pct, status, cm});
   }
+  // ---- Cost annotation (LastTotalUnitCost from CI_Item; BOM roll-up for bills) ----
+  const costMemo=new Map();
+  function unitCost(item, depth){
+    if(depth>8) return itemCost.get(item)||0;
+    if(costMemo.has(item)) return costMemo.get(item);
+    let v;
+    const ch=children.get(item);
+    if(ch && ch.length){ v=0; for(const [c,per] of ch) v+=per*unitCost(c,depth+1); if(v===0) v=itemCost.get(item)||0; }
+    else v=itemCost.get(item)||0;
+    costMemo.set(item,v); return v;
+  }
+  for(const r of FG){ const u=unitCost(r.item,0); r.ucost=u; r.floorC=r.floor*u; r.sageC=r.sage*u; r.gapC=r.after*u; }
+  for(const r of RM){ const u=itemCost.get(r.comp)!=null?itemCost.get(r.comp):unitCost(r.comp,0); r.ucost=u; r.thC=r.thF>0?r.thF*u:r.thS*u; r.actC=r.act*u; r.devC=r.dev*u; }
   render();
 }
 
@@ -350,23 +372,23 @@ let fgSort={k:null,d:1}, rmSort={k:null,d:1};
 function drawFG(){
   const q=document.getElementById('fgSearch').value.toLowerCase();
   const c=document.getElementById('fgCat').value, s=document.getElementById('fgStatus').value;
-  let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q))&&(!c||r.cat===c)&&(!s||r.status===s));
+  let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!c||r.cat===c)&&(!s||r.status===s));
   rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (FG_ORDER[x.status]-FG_ORDER[y.status])||Math.abs(y.after)-Math.abs(x.after));
-  const cols=[['item','Item'],['cat','Category'],['floor','Floor Produced'],['sage','Sage (JR+BR)'],['gap','Gap'],['adj','Adjust­ments'],['after','Gap After Adj'],['pct','% After'],['status','Status'],['cm','Comment']];
+  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['floor','Floor Produced'],['floorC','Floor Cost'],['sage','Sage (JR+BR)'],['sageC','Sage Cost'],['gap','Gap'],['adj','Adjust­ments'],['after','Gap After Adj'],['gapC','Gap Cost'],['pct','% After'],['status','Status'],['cm','Comment']];
   document.getElementById('fgTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'fg\',\''+k+'\')">'+h+(fgSort.k===k?'<span class="arrow">'+(fgSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td>'+r.cat+'</td><td class="num">'+fmt(r.floor)+'</td><td class="num">'+fmt(r.sage)+'</td><td class="num">'+fmtS(r.gap)+'</td><td class="num">'+fmtS(r.adj)+'</td><td class="num"><b>'+fmtS(r.after)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td style="white-space:normal;min-width:150px">'+r.desc+'</td><td>'+r.cat+'</td><td class="num">'+fmt(r.floor)+'</td><td class="num">'+fmtC(r.floorC)+'</td><td class="num">'+fmt(r.sage)+'</td><td class="num">'+fmtC(r.sageC)+'</td><td class="num">'+fmtS(r.gap)+'</td><td class="num">'+fmtS(r.adj)+'</td><td class="num"><b>'+fmtS(r.after)+'</b></td><td class="num"><b>'+fmtC(r.gapC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
   document.getElementById('fgCount').textContent=rows.length+' of '+FG.length+' items';
 }
 function drawRM(){
   const q=document.getElementById('rmSearch').value.toLowerCase();
   const s=document.getElementById('rmStatus').value;
-  let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q))&&(!s||r.status===s));
+  let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q))&&(!s||r.status===s));
   rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.dev)-Math.abs(x.dev));
-  const cols=[['comp','Component'],['thF','Theoretical (Floor×BOM)'],['act','Actual (JI+BI)'],['dev','Deviation'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  const cols=[['comp','Component'],['desc','Description'],['thF','Theoretical (Floor×BOM)'],['thC','Theoretical Cost'],['act','Actual (JI+BI)'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
   document.getElementById('rmTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="num">'+fmt(r.thF)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td style="white-space:normal;min-width:150px">'+r.desc+'</td><td class="num">'+fmt(r.thF)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.act)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
   document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
 }
 function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
@@ -412,14 +434,14 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
     ['Raw materials: theoretical = floor production x BOM (multi-level, no scrap, material lines only); actual = JI+BI. Adjustments intentionally not applied to raw materials.'],
     ['Excluded lines: D line, Plantation, Worth St. UOM items A13/AA11/AX11 flagged, not judged.'],
   ];
-  const fgSheet=[['Item','Category','Floor Produced','Sage (JR+BR)','Gap','Adjustments','Gap After Adj','% After','Status','Comment'],
-    ...FG.map(r=>[r.item,r.cat,r.floor,r.sage,r.gap,r.adj,r.after,r.pct,r.status,r.cm])];
-  const rmSheet=[['Component','Theoretical (Floor x BOM)','Actual (JI+BI)','Deviation','Deviation %','Status','Comment'],
-    ...RM.map(r=>[r.comp,r.thF,r.act,r.dev,r.pct,r.status,r.cm])];
+  const fgSheet=[['Item','Description','Category','Floor Produced','Floor Cost','Sage (JR+BR)','Sage Cost','Gap','Adjustments','Gap After Adj','Gap Cost','% After','Status','Comment'],
+    ...FG.map(r=>[r.item,r.desc,r.cat,r.floor,r.floorC,r.sage,r.sageC,r.gap,r.adj,r.after,r.gapC,r.pct,r.status,r.cm])];
+  const rmSheet=[['Component','Description','Theoretical (Floor x BOM)','Theoretical Cost','Actual (JI+BI)','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
+    ...RM.map(r=>[r.comp,r.desc,r.thF,r.thC,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
   const wb=XLSX.utils.book_new();
   const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:52},{wch:14}];
-  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,16,14,14,12,12,14,9,14,70].map(w=>({wch:w}));
-  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,20,14,12,11,14,70].map(w=>({wch:w}));
+  const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,30,16,14,13,14,13,12,12,14,13,9,14,70].map(w=>({wch:w}));
+  const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,30,20,14,14,13,12,13,11,14,70].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s1,'Summary');
   XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
   XLSX.utils.book_append_sheet(wb,s3,'Raw Materials');
