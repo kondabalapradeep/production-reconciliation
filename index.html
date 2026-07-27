@@ -71,6 +71,25 @@ details.method h4{color:var(--navy); margin:12px 0 4px; font-size:12.5px;}
 details.method li{margin:5px 0 0 18px;}
 details.method td, details.method th{position:static; cursor:default;}
 #results{display:none;}
+.viewtoggle{display:flex; border:1px solid var(--navy); border-radius:6px; overflow:hidden;}
+.viewtoggle button{border:none; background:#fff; color:var(--navy); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer;}
+.viewtoggle button.on{background:var(--navy); color:#fff;}
+.printhead{display:none;}
+@media print{
+  @page{size:landscape; margin:10mm;}
+  body{background:#fff;}
+  .uploads,.runbar,.daybar,.filters,details.method,.tabs,.gauge,.gauge-legend{display:none !important;}
+  .panel{display:block !important; border:none !important; padding:0 !important;}
+  #pFG{page-break-after:always;}
+  .tblwrap{max-height:none !important; overflow:visible !important; border:none !important;}
+  th{position:static !important; background:var(--navy) !important; color:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  .pill{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  .kpi{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  table{font-size:10px;}
+  td,th{padding:4px 6px;}
+  .printhead{display:block; font-size:15px; font-weight:700; color:var(--navy); margin:8px 0;}
+  tr{page-break-inside:avoid;}
+}
 .count{font-size:12px; color:var(--steel); margin-left:auto;}
 </style>
 </head>
@@ -110,6 +129,10 @@ details.method td, details.method th{position:static; cursor:default;}
   <button class="run" id="btnRun" disabled>Run report</button>
   <button class="ghost" id="btnClear">Clear files &amp; start over</button>
   <button class="ghost" id="btnXlsx" style="display:none">Download Excel report</button>
+  <button class="ghost" id="btnPdf" style="display:none">Export PDF</button>
+  <div class="viewtoggle" id="viewToggle" style="display:none">
+    <button id="vSimple" class="on">Simple</button><button id="vDetail">Detailed</button>
+  </div>
   <button class="ghost" id="btnSnap" style="display:none">Download shareable snapshot (HTML)</button>
   <span id="runmsg"></span>
 </div>
@@ -126,6 +149,7 @@ details.method td, details.method th{position:static; cursor:default;}
   </div>
 
   <div class="panel active" id="pFG">
+    <div class="printhead">Finished Goods Produced — <span class="printPeriod"></span></div>
     <div class="filters">
       <input type="text" id="fgSearch" placeholder="Search item or description…">
       <select id="fgCat"><option value="">All categories</option></select>
@@ -135,6 +159,7 @@ details.method td, details.method th{position:static; cursor:default;}
   </div>
 
   <div class="panel" id="pRM">
+    <div class="printhead">Raw Material Consumption — <span class="printPeriod"></span></div>
     <div class="filters">
       <input type="text" id="rmSearch" placeholder="Search component, description, or finished good…">
       <select id="rmStatus"><option value="">All statuses</option></select>
@@ -252,7 +277,7 @@ document.getElementById('btnClear').addEventListener('click',()=>{
 
 document.getElementById('btnRun').addEventListener('click', ()=>{
   const msg=document.getElementById('runmsg'); msg.textContent='Computing…';
-  setTimeout(()=>{ try{ prepare(); compute(); msg.textContent='Done — use the day toggles to drill into a single date.'; }catch(e){ msg.textContent='Error: '+e.message; } }, 30);
+  setTimeout(()=>{ try{ prepare(); compute(); msg.textContent='Done — Simple view shown; switch to Detailed for full cost breakdown. Export PDF prints FG on page 1, raw materials on page 2.'; }catch(e){ msg.textContent='Error: '+e.message; } }, 30);
 });
 
 function prepare(){
@@ -403,6 +428,8 @@ function render(){
   document.getElementById('results').style.display='block';
   document.getElementById('btnXlsx').style.display='inline-block';
   document.getElementById('btnSnap').style.display='inline-block';
+  document.getElementById('btnPdf').style.display='inline-block';
+  document.getElementById('viewToggle').style.display='flex';
   const totQty=FG.reduce((s,r)=>s+r.qty,0);
   const thCost=FG.reduce((s,r)=>s+r.thC,0), actCost=FG.reduce((s,r)=>s+r.actC,0);
   const varCost=actCost-thCost;
@@ -433,16 +460,27 @@ function render(){
   drawFG(); drawRM();
 }
 
-let fgSort={k:null,d:1}, rmSort={k:null,d:1};
+let fgSort={k:null,d:1}, rmSort={k:null,d:1}, viewMode='simple';
+document.getElementById('vSimple').addEventListener('click',()=>{viewMode='simple';
+  document.getElementById('vSimple').classList.add('on'); document.getElementById('vDetail').classList.remove('on'); drawFG(); drawRM();});
+document.getElementById('vDetail').addEventListener('click',()=>{viewMode='detailed';
+  document.getElementById('vDetail').classList.add('on'); document.getElementById('vSimple').classList.remove('on'); drawFG(); drawRM();});
+document.getElementById('btnPdf').addEventListener('click',()=>{
+  document.querySelectorAll('.printPeriod').forEach(e=>e.textContent=document.getElementById('windowTag').textContent);
+  window.print();
+});
 function drawFG(){
   const q=document.getElementById('fgSearch').value.toLowerCase();
   const c=document.getElementById('fgCat').value;
   let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.lot.toLowerCase().includes(q))&&(!c||r.cat===c));
   rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC));
-  const cols=[['item','Item'],['desc','Description'],['cat','Category'],['lot','Lot / Work Ticket(s)'],['uStd','Std Unit Cost (BOM)'],['uAct','Actual Unit Cost'],['qty','Sage Net (JR+BR+IA)'],['thC','Theoretical Cost'],['actC','Actual Cost (Materials)'],['varC','Cost Variance'],['pct','Var %']];
+  const colsAll=[['item','Item'],['desc','Description'],['cat','Category'],['lot','Lot / Work Ticket(s)'],['uStd','Std Unit Cost (BOM)'],['uAct','Actual Unit Cost'],['qty','Sage Net (JR+BR+IA)'],['thC','Theoretical Cost'],['actC','Actual Cost (Materials)'],['varC','Cost Variance'],['pct','Var %']];
+  const colsSimple=[['item','Item'],['desc','Description'],['cat','Category'],['qty','Produced (Net)'],['actC','Material Cost'],['varC','Cost Variance'],['pct','Var %']];
+  const cols=viewMode==='simple'?colsSimple:colsAll;
+  const cell={item:r=>'<td><b>'+r.item+'</b></td>',desc:r=>'<td class="desc">'+r.desc+'</td>',cat:r=>'<td>'+r.cat+'</td>',lot:r=>'<td class="desc" style="font-size:11.5px">'+r.lot+'</td>',uStd:r=>'<td class="num">'+fmtU(r.uStd)+'</td>',uAct:r=>'<td class="num">'+fmtU(r.uAct)+'</td>',qty:r=>'<td class="num">'+fmt(r.qty)+'</td>',thC:r=>'<td class="num">'+fmtC(r.thC)+'</td>',actC:r=>'<td class="num">'+fmtC(r.actC)+'</td>',varC:r=>'<td class="num"><b>'+fmtC(r.varC,true)+'</b></td>',pct:r=>'<td class="num">'+fmtP(r.pct)+'</td>'};
   document.getElementById('fgTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'fg\',\''+k+'\')">'+h+(fgSort.k===k?'<span class="arrow">'+(fgSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.item+'</b></td><td class="desc">'+r.desc+'</td><td>'+r.cat+'</td><td class="desc" style="font-size:11.5px">'+r.lot+'</td><td class="num">'+fmtU(r.uStd)+'</td><td class="num">'+fmtU(r.uAct)+'</td><td class="num">'+fmt(r.qty)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtC(r.varC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td></tr>').join('');
+    rows.map(r=>'<tr>'+cols.map(([k])=>cell[k](r)).join('')+'</tr>').join('');
   document.getElementById('fgCount').textContent=rows.length+' of '+FG.length+' items';
 }
 function drawRM(){
@@ -450,10 +488,13 @@ function drawRM(){
   const s=document.getElementById('rmStatus').value;
   let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.used.toLowerCase().includes(q))&&(!s||r.status===s));
   rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.devC)-Math.abs(x.devC));
-  const cols=[['comp','Component'],['desc','Description'],['unit','Unit Cost'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['actJ','JI+BI Issues'],['actIA','Adjustments (IA)'],['act','Total Actual'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  const colsAll=[['comp','Component'],['desc','Description'],['unit','Unit Cost'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['actJ','JI+BI Issues'],['actIA','Adjustments (IA)'],['act','Total Actual'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  const colsSimple=[['comp','Component'],['desc','Description'],['th','Theoretical (BOM)'],['act','Actual Used'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status']];
+  const cols=viewMode==='simple'?colsSimple:colsAll;
+  const cell={comp:r=>'<td><b>'+r.comp+'</b></td>',desc:r=>'<td class="desc">'+r.desc+'</td>',unit:r=>'<td class="num">'+fmtU(r.unit)+'</td>',used:r=>'<td class="desc" style="font-size:11.5px">'+r.used+'</td>',th:r=>'<td class="num">'+fmt(r.th)+'</td>',thC:r=>'<td class="num">'+fmtC(r.thC)+'</td>',actJ:r=>'<td class="num">'+fmt(r.actJ)+'</td>',actIA:r=>'<td class="num">'+fmtS(r.actIA)+'</td>',act:r=>'<td class="num"><b>'+fmt(r.act)+'</b></td>',actC:r=>'<td class="num">'+fmtC(r.actC)+'</td>',dev:r=>'<td class="num"><b>'+fmtS(r.dev)+'</b></td>',devC:r=>'<td class="num"><b>'+fmtC(r.devC,true)+'</b></td>',pct:r=>'<td class="num">'+fmtP(r.pct)+'</td>',status:r=>'<td>'+pill(r.status)+'</td>',cm:r=>'<td class="cmt">'+r.cm+'</td>'};
   document.getElementById('rmTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
-    rows.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="desc">'+r.desc+'</td><td class="num">'+fmtU(r.unit)+'</td><td class="desc" style="font-size:11.5px">'+r.used+'</td><td class="num">'+fmt(r.th)+'</td><td class="num">'+fmtC(r.thC)+'</td><td class="num">'+fmt(r.actJ)+'</td><td class="num">'+fmtS(r.actIA)+'</td><td class="num"><b>'+fmt(r.act)+'</b></td><td class="num">'+fmtC(r.actC)+'</td><td class="num"><b>'+fmtS(r.dev)+'</b></td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td><td class="cmt">'+r.cm+'</td></tr>').join('');
+    rows.map(r=>'<tr>'+cols.map(([k])=>cell[k](r)).join('')+'</tr>').join('');
   document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
 }
 function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
