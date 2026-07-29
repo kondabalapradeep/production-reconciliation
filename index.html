@@ -45,6 +45,12 @@ button.ghost{background:#fff; color:var(--navy); border:1px solid var(--navy); b
 .gauge div{height:100%;}
 .gauge-legend{display:flex; gap:16px; font-size:11.5px; color:var(--steel); margin-bottom:18px; flex-wrap:wrap;}
 .dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px;}
+.glance{display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:14px; margin:4px 0 20px;}
+.gcard{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px;}
+.gcard h3{font-size:13px; color:var(--navy); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;}
+.gcard table{font-size:12px;}
+.gcard th{background:#eef2f7; color:var(--navy); position:static; cursor:default; padding:5px 8px;}
+.gcard td{padding:4px 8px;}
 .tabs{display:flex; gap:0; border-bottom:2px solid var(--line);}
 .tab{padding:9px 20px; font-size:13.5px; font-weight:600; color:var(--steel); cursor:pointer; border:none; background:none; border-bottom:3px solid transparent; margin-bottom:-2px;}
 .tab.active{color:var(--navy); border-bottom-color:var(--navy);}
@@ -81,6 +87,8 @@ details.method td, details.method th{position:static; cursor:default;}
   .uploads,.runbar,.daybar,.filters,details.method,.tabs,.gauge,.gauge-legend{display:none !important;}
   .panel{display:block !important; border:none !important; padding:0 !important;}
   #pFG{page-break-after:always;}
+  #pBT{page-break-after:always;}
+  .glance{display:grid !important;}
   .tblwrap{max-height:none !important; overflow:visible !important; border:none !important;}
   th{position:static !important; background:var(--navy) !important; color:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
   .pill{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
@@ -89,7 +97,12 @@ details.method td, details.method th{position:static; cursor:default;}
   td,th{padding:4px 6px;}
   .printhead{display:block; font-size:15px; font-weight:700; color:var(--navy); margin:8px 0;}
   tr{page-break-inside:avoid;}
+  body.print-summary .tabs, body.print-summary .panel{display:none !important;}
+  body.print-summary .glance{display:grid !important; grid-template-columns:1fr 1fr;}
+  body.print-summary .gauge, body.print-summary .gauge-legend{display:flex !important;}
+  body.print-summary #sumTitle{display:block; font-size:16px; font-weight:700; color:var(--navy); margin:6px 0;}
 }
+#sumTitle{display:none;}
 .count{font-size:12px; color:var(--steel); margin-left:auto;}
 </style>
 </head>
@@ -129,7 +142,8 @@ details.method td, details.method th{position:static; cursor:default;}
   <button class="run" id="btnRun" disabled>Run report</button>
   <button class="ghost" id="btnClear">Clear files &amp; start over</button>
   <button class="ghost" id="btnXlsx" style="display:none">Download Excel report</button>
-  <button class="ghost" id="btnPdf" style="display:none">Export PDF</button>
+  <button class="ghost" id="btnPdf" style="display:none">Export PDF (detail)</button>
+  <button class="ghost" id="btnPdfSum" style="display:none">Export PDF (1-page summary)</button>
   <div class="viewtoggle" id="viewToggle" style="display:none">
     <button id="vSimple" class="on">Simple</button><button id="vDetail">Detailed</button>
   </div>
@@ -139,12 +153,16 @@ details.method td, details.method th{position:static; cursor:default;}
 
 <div id="results">
   <div class="daybar" id="daybar"></div>
+  <div id="sumTitle">Executive Summary — <span class="printPeriod"></span></div>
   <div class="kpis" id="kpis"></div>
   <div class="gauge" id="gauge"></div>
   <div class="gauge-legend" id="gaugeLegend"></div>
 
+  <div class="glance" id="glance"></div>
+
   <div class="tabs">
     <button class="tab active" data-panel="pFG">Finished Goods Produced</button>
+    <button class="tab" data-panel="pBT">Batches</button>
     <button class="tab" data-panel="pRM">Raw Material Consumption</button>
   </div>
 
@@ -156,6 +174,15 @@ details.method td, details.method th{position:static; cursor:default;}
       <span class="count" id="fgCount"></span>
     </div>
     <div class="tblwrap"><table id="fgTable"></table></div>
+  </div>
+
+  <div class="panel" id="pBT">
+    <div class="printhead">Batches — <span class="printPeriod"></span></div>
+    <div class="filters">
+      <input type="text" id="btSearch" placeholder="Search batch or description…">
+      <span class="count" id="btCount"></span>
+    </div>
+    <div class="tblwrap"><table id="btTable"></table></div>
   </div>
 
   <div class="panel" id="pRM">
@@ -210,7 +237,7 @@ details.method td, details.method th{position:static; cursor:default;}
 
 <script>
 let txnRows=null, bomRows=null, itemMaster=new Map(), itemCost=new Map();
-let FG=[], RM=[], dates=[], selDay='ALL';
+let FG=[], RM=[], BT=[], dates=[], selDay='ALL';
 let children=new Map(), costMemo=new Map();
 
 function serialToDate(v){ if(v instanceof Date) return v; if(typeof v==='number'&&v>20000&&v<80000){return new Date(Date.UTC(1899,11,30)+v*86400000);} const d=new Date(v); return isNaN(d)?null:d; }
@@ -220,8 +247,9 @@ function fmtS(n){ const r=Math.round(n); return (r>0?'+':'')+r.toLocaleString('e
 function fmtP(p){ return p==null?'—':(p>0?'+':'')+(p*100).toFixed(1)+'%'; }
 function fmtC(n,signed){ if(n==null) return '—'; const v=Math.round(n); const sign=v<0?'-':(v>0&&signed?'+':''); return sign+'$'+Math.abs(v).toLocaleString('en-US'); }
 function fmtU(n){ if(n==null) return '—'; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function catOf(it){ const c=it[0]?it[0].toUpperCase():''; return c==='A'?'Aerosol':c==='P'?'Pops':c==='H'?'Rainbow / Drinks':c==='W'?'Water 1 Gal':c==='L'?'Water 2.5 Gal':'Batch / Other'; }
-const CAT_ORDER={'Aerosol':0,'Pops':1,'Rainbow / Drinks':2,'Water 1 Gal':3,'Water 2.5 Gal':4,'Batch / Other':5};
+function classOf(it){ const d=itemMaster.get(it); if(d && /batch/i.test(d)) return 'BATCH'; const c=it[0]?it[0].toUpperCase():''; if(/[0-9]/.test(c)) return 'RM'; if(c==='B') return 'BATCH'; if('APDHLW'.includes(c)) return 'FG'; return 'BATCH'; }
+function catOf(it){ const c=it[0]?it[0].toUpperCase():''; return c==='A'?'Aerosol':c==='P'?'Pops':c==='H'?'Rainbow / Drinks':c==='W'?'Water 1 Gal':c==='L'?'Water 2.5 Gal':c==='D'?'Other FG (D)':'Batch / Other'; }
+const CAT_ORDER={'Aerosol':0,'Pops':1,'Rainbow / Drinks':2,'Water 1 Gal':3,'Water 2.5 Gal':4,'Other FG (D)':5,'Batch / Other':6};
 
 function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false})); r.onerror=rej; r.readAsArrayBuffer(file); }); }
 
@@ -261,7 +289,7 @@ document.getElementById('fBom').addEventListener('change', async e=>{
 function ready(){ document.getElementById('btnRun').disabled = !(txnRows&&bomRows); }
 
 document.getElementById('btnClear').addEventListener('click',()=>{
-  txnRows=null; bomRows=null; FG=[]; RM=[]; dates=[]; selDay='ALL';
+  txnRows=null; bomRows=null; FG=[]; RM=[]; BT=[]; dates=[]; selDay='ALL';
   itemMaster=new Map(); itemCost=new Map();
   for(const id of ['fTxn','fBom']){ const el=document.getElementById(id); if(el) el.value=''; }
   document.getElementById('sTxn').className='ustat'; document.getElementById('sTxn').textContent='No file loaded';
@@ -321,13 +349,16 @@ function compute(){
   const everProduced=new Set();
   for(const r of txnRows){ if(r.code==='JR'||r.code==='BR') everProduced.add(r.item); }
   const jrbr=new Map(), jibi=new Map(), iaMap=new Map(), lots=new Map();
+  const prodDays=new Map(), consDays=new Map();
+  const addDay=(m,it,d)=>{ if(!m.has(it)) m.set(it,new Set()); m.get(it).add(dstr(d).slice(5)); };
   for(const r of txnRows){
     if(!inDay(r)) continue;
-    if(r.code==='JR'||r.code==='BR'){ jrbr.set(r.item,(jrbr.get(r.item)||0)+r.qty);
+    if(r.code==='JR'||r.code==='BR'){ jrbr.set(r.item,(jrbr.get(r.item)||0)+r.qty); addDay(prodDays,r.item,r.date);
       if(r.wt){ if(!lots.has(r.item)) lots.set(r.item,new Set()); lots.get(r.item).add(r.wt); } }
-    else if(r.code==='JI'||r.code==='BI') jibi.set(r.item,(jibi.get(r.item)||0)-r.qty);
-    else if(r.code==='IA') iaMap.set(r.item,(iaMap.get(r.item)||0)+r.qty);
+    else if(r.code==='JI'||r.code==='BI'){ jibi.set(r.item,(jibi.get(r.item)||0)-r.qty); addDay(consDays,r.item,r.date); }
+    else if(r.code==='IA'){ iaMap.set(r.item,(iaMap.get(r.item)||0)+r.qty); addDay(consDays,r.item,r.date); }
   }
+  const dayList=(m,it)=>{ const st=m.get(it); if(!st) return ''; const a=[...st].sort(); return a.length>7?a.slice(0,7).join(', ')+' +'+(a.length-7):a.join(', '); };
   const prod=new Map(jrbr), cons=new Map(jibi), consIA=new Map();
   for(const [it,q] of iaMap){
     if(everProduced.has(it)) prod.set(it,(prod.get(it)||0)+q);
@@ -361,9 +392,10 @@ function compute(){
   }
 
   // Finished goods with theoretical + allocated actual material cost
-  FG=[];
+  FG=[]; BT=[];
   for(const [it,q] of [...prod.entries()].sort()){
     if(q===0) continue;
+    if(classOf(it)!=='FG') continue;
     const u=unitCost(it,0);
     let actC=0; const dm=demand.get(it);
     if(dm) for(const [c,d] of dm){ const td=totalDemand.get(c)||0; const share=td>0?d/td:0;
@@ -372,7 +404,7 @@ function compute(){
     const varC=actC-thC;
     const lset=lots.get(it); let lotStr='';
     if(lset){ const arr=[...lset].sort(); lotStr = arr.length>6 ? arr.slice(0,6).join(', ')+' +'+(arr.length-6)+' more' : arr.join(', '); }
-    FG.push({item:it, desc:itemMaster.get(it)||'', cat:catOf(it), lot:lotStr, qty:q, uStd:u, uAct:q>0?actC/q:null, thC, actC, varC, pct:thC>0?varC/thC:null});
+    FG.push({item:it, desc:itemMaster.get(it)||'', cat:catOf(it), days:dayList(prodDays,it), lot:lotStr, qty:q, uStd:u, uAct:q>0?actC/q:null, thC, actC, varC, pct:thC>0?varC/thC:null});
   }
 
   // Used-In resolution
@@ -400,9 +432,30 @@ function compute(){
   }
 
   // Raw materials
+  // ---- Batches: produced + consumed-as-component view ----
+  const batchSet=new Set();
+  for(const it of prod.keys()) if(classOf(it)==='BATCH') batchSet.add(it);
+  for(const c of totalDemand.keys()) if(classOf(c)==='BATCH') batchSet.add(c);
+  for(const c of cons.keys()) if(classOf(c)==='BATCH') batchSet.add(c);
+  for(const b of [...batchSet].sort()){
+    const p=prod.get(b)||0, e=totalDemand.get(b)||0, a=totalCons(b);
+    if(Math.abs(p)<1e-6 && Math.abs(e)<1e-6 && Math.abs(a)<1e-6) continue;
+    const u=itemCost.get(b)!=null&&itemCost.get(b)>0?itemCost.get(b):unitCost(b,0);
+    const dev=a-e; let pct=e>0?dev/e:null, status, cm;
+    if(e===0&&a===0){ status='NOT CONSUMED'; cm='Batch produced but not consumed by any finished good this period.'; }
+    else if(e===0){ status='NO BOM DEMAND'; cm='Batch consumed with no BOM demand from any produced finished good.'; }
+    else if(a===0){ status='NOT CONSUMED'; cm='Finished goods call for this batch but no consumption was posted.'; }
+    else if(Math.abs(pct)<=0.05){ status='IN LINE'; cm='Batch usage in line with BOM (within 5%).'; }
+    else if(pct>0.15){ status='OVER'; cm='Batch over-consumed '+fmtP(pct)+' vs BOM.'; }
+    else if(pct<-0.15){ status='UNDER'; cm='Batch under-consumed '+fmtP(pct)+' vs BOM.'; }
+    else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
+    BT.push({comp:b, desc:itemMaster.get(b)||'', days:(dayList(prodDays,b)||dayList(consDays,b)), unit:u, prod:p, th:e, act:a, dev, devC:dev*u, pct, status, cm});
+  }
+
   RM=[];
   const comps=new Set([...totalDemand.keys(),...cons.keys(),...consIA.keys()]);
   for(const c of [...comps].sort()){
+    if(classOf(c)!=='RM') continue;
     const e=totalDemand.get(c)||0, aJIBI=cons.get(c)||0, aIA=consIA.get(c)||0, a=aJIBI+aIA;
     if(Math.abs(e)<1e-6 && Math.abs(a)<1e-6) continue;
     const u=itemCost.get(c)!=null&&itemCost.get(c)>0?itemCost.get(c):unitCost(c,0);
@@ -413,7 +466,7 @@ function compute(){
     else if(pct>0.15){ status='OVER'; cm='Over-consumed '+fmtP(pct)+' vs BOM — scrap/waste above standard or BOM understated.'; }
     else if(pct<-0.15){ status='UNDER'; cm='Under-consumed '+fmtP(pct)+' vs BOM — issues not fully posted or BOM overstated.'; }
     else { status='MODERATE'; cm='Moderate deviation ('+fmtP(pct)+' vs BOM).'; }
-    RM.push({comp:c, desc:itemMaster.get(c)||'', unit:u, used:usedInList(c), th:e, thC:e*u, actJ:aJIBI, actIA:aIA, act:a, actC:a*u, dev, devC:dev*u, pct, status, cm});
+    RM.push({comp:c, desc:itemMaster.get(c)||'', days:dayList(consDays,c), unit:u, used:usedInList(c), th:e, thC:e*u, actJ:aJIBI, actIA:aIA, act:a, actC:a*u, dev, devC:dev*u, pct, status, cm});
   }
   render();
 }
@@ -429,19 +482,32 @@ function render(){
   document.getElementById('btnXlsx').style.display='inline-block';
   document.getElementById('btnSnap').style.display='inline-block';
   document.getElementById('btnPdf').style.display='inline-block';
+  document.getElementById('btnPdfSum').style.display='inline-block';
   document.getElementById('viewToggle').style.display='flex';
   const totQty=FG.reduce((s,r)=>s+r.qty,0);
   const thCost=FG.reduce((s,r)=>s+r.thC,0), actCost=FG.reduce((s,r)=>s+r.actC,0);
   const varCost=actCost-thCost;
   const rmBad=RM.filter(r=>r.status==='OVER'||r.status==='UNDER').length;
+  const rmTransacted=RM.filter(r=>Math.abs(r.act)>0).length;
   document.getElementById('kpis').innerHTML=
     kpi(FG.length,'Items produced (Sage net)','good')+
     kpi(fmt(totQty),'Total units produced','good')+
+    kpi(rmTransacted,'Raw materials transacted (JI+BI+IA)','good')+
+    kpi(BT.length,'Batches active','good')+
     kpi(fmtC(thCost),'Theoretical material cost (BOM)','good')+
-    kpi(fmtC(actCost),'Actual material cost (JI+BI)', varCost>0.02*Math.max(thCost,1)?'warn':'good')+
+    kpi(fmtC(actCost),'Actual material cost','good')+
     kpi(fmtC(varCost,true),'Cost variance (actual - BOM)', Math.abs(varCost)<0.02*Math.max(thCost,1)?'good':(varCost>0?'bad':'warn'))+
     kpi(rmBad,'Components over / under-consumed', rmBad===0?'good':'bad');
   function kpi(v,l,c){ return '<div class="kpi '+c+'"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
+
+  // At-a-glance: top finished goods by volume, top deviated raw materials by $
+  const topFG=[...FG].sort((a,b)=>b.qty-a.qty).slice(0,10);
+  const topRM=[...RM].sort((a,b)=>Math.abs(b.devC)-Math.abs(a.devC)).slice(0,10);
+  document.getElementById('glance').innerHTML=
+    '<div class="gcard"><h3>Top 10 Finished Goods — Production Volume</h3><table><tr><th>Item</th><th>Description</th><th style="text-align:right">Produced (Net)</th><th style="text-align:right">Cost Variance</th></tr>'+
+    topFG.map(r=>'<tr><td><b>'+r.item+'</b></td><td class="desc">'+r.desc+'</td><td class="num">'+fmt(r.qty)+'</td><td class="num"><b>'+fmtC(r.varC,true)+'</b></td></tr>').join('')+'</table></div>'+
+    '<div class="gcard"><h3>Top 10 Raw Materials — Highest $ Deviation</h3><table><tr><th>Component</th><th>Description</th><th style="text-align:right">Deviation Cost</th><th style="text-align:right">Dev %</th><th>Status</th></tr>'+
+    topRM.map(r=>'<tr><td><b>'+r.comp+'</b></td><td class="desc">'+r.desc+'</td><td class="num"><b>'+fmtC(r.devC,true)+'</b></td><td class="num">'+fmtP(r.pct)+'</td><td>'+pill(r.status)+'</td></tr>').join('')+'</table></div>';
 
   const segs=[['IN LINE','#1b7f4d'],['MODERATE','#a86400'],['NOT CONSUMED','#c9a227'],['NO BOM DEMAND','#8a6d1a'],['UNDER','#a34b44'],['OVER','#7a1a14']];
   let g='',leg='';
@@ -457,16 +523,23 @@ function render(){
   catSel.innerHTML='<option value="">All categories</option>'+cats.map(c=>'<option'+(c===keep?' selected':'')+'>'+c+'</option>').join('');
   const stSel=document.getElementById('rmStatus'); const keep2=stSel.value;
   stSel.innerHTML='<option value="">All statuses</option>'+Object.keys(RM_ORDER).map(s=>'<option'+(s===keep2?' selected':'')+'>'+s+'</option>').join('');
-  drawFG(); drawRM();
+  drawFG(); drawRM(); drawBT();
 }
 
-let fgSort={k:null,d:1}, rmSort={k:null,d:1}, viewMode='simple';
+let fgSort={k:null,d:1}, rmSort={k:null,d:1}, btSort={k:null,d:1}, viewMode='simple';
 document.getElementById('vSimple').addEventListener('click',()=>{viewMode='simple';
-  document.getElementById('vSimple').classList.add('on'); document.getElementById('vDetail').classList.remove('on'); drawFG(); drawRM();});
+  document.getElementById('vSimple').classList.add('on'); document.getElementById('vDetail').classList.remove('on'); drawFG(); drawRM(); drawBT();});
 document.getElementById('vDetail').addEventListener('click',()=>{viewMode='detailed';
-  document.getElementById('vDetail').classList.add('on'); document.getElementById('vSimple').classList.remove('on'); drawFG(); drawRM();});
+  document.getElementById('vDetail').classList.add('on'); document.getElementById('vSimple').classList.remove('on'); drawFG(); drawRM(); drawBT();});
 document.getElementById('btnPdf').addEventListener('click',()=>{
   document.querySelectorAll('.printPeriod').forEach(e=>e.textContent=document.getElementById('windowTag').textContent);
+  window.print();
+});
+document.getElementById('btnPdfSum').addEventListener('click',()=>{
+  document.querySelectorAll('.printPeriod').forEach(e=>e.textContent=document.getElementById('windowTag').textContent);
+  document.body.classList.add('print-summary');
+  const clean=()=>document.body.classList.remove('print-summary');
+  window.onafterprint=clean; setTimeout(clean,3000);
   window.print();
 });
 function drawFG(){
@@ -474,10 +547,10 @@ function drawFG(){
   const c=document.getElementById('fgCat').value;
   let rows=FG.filter(r=>(!q||r.item.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.lot.toLowerCase().includes(q))&&(!c||r.cat===c));
   rows.sort((x,y)=> fgSort.k? fgSort.d*((x[fgSort.k]??-Infinity)>(y[fgSort.k]??-Infinity)?1:-1) : (CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC));
-  const colsAll=[['item','Item'],['desc','Description'],['cat','Category'],['lot','Lot / Work Ticket(s)'],['uStd','Std Unit Cost (BOM)'],['uAct','Actual Unit Cost'],['qty','Sage Net (JR+BR+IA)'],['thC','Theoretical Cost'],['actC','Actual Cost (Materials)'],['varC','Cost Variance'],['pct','Var %']];
-  const colsSimple=[['item','Item'],['desc','Description'],['cat','Category'],['qty','Produced (Net)'],['actC','Material Cost'],['varC','Cost Variance'],['pct','Var %']];
+  const colsAll=[['item','Item'],['desc','Description'],['cat','Category'],['days','Production Days'],['lot','Lot / Work Ticket(s)'],['uStd','Std Unit Cost (BOM)'],['uAct','Actual Unit Cost'],['qty','Sage Net (JR+BR+IA)'],['thC','Theoretical Cost'],['actC','Actual Cost (Materials)'],['varC','Cost Variance'],['pct','Var %']];
+  const colsSimple=[['item','Item'],['desc','Description'],['cat','Category'],['days','Production Days'],['qty','Produced (Net)'],['actC','Material Cost'],['varC','Cost Variance'],['pct','Var %']];
   const cols=viewMode==='simple'?colsSimple:colsAll;
-  const cell={item:r=>'<td><b>'+r.item+'</b></td>',desc:r=>'<td class="desc">'+r.desc+'</td>',cat:r=>'<td>'+r.cat+'</td>',lot:r=>'<td class="desc" style="font-size:11.5px">'+r.lot+'</td>',uStd:r=>'<td class="num">'+fmtU(r.uStd)+'</td>',uAct:r=>'<td class="num">'+fmtU(r.uAct)+'</td>',qty:r=>'<td class="num">'+fmt(r.qty)+'</td>',thC:r=>'<td class="num">'+fmtC(r.thC)+'</td>',actC:r=>'<td class="num">'+fmtC(r.actC)+'</td>',varC:r=>'<td class="num"><b>'+fmtC(r.varC,true)+'</b></td>',pct:r=>'<td class="num">'+fmtP(r.pct)+'</td>'};
+  const cell={item:r=>'<td><b>'+r.item+'</b></td>',desc:r=>'<td class="desc">'+r.desc+'</td>',cat:r=>'<td>'+r.cat+'</td>',days:r=>'<td class="desc" style="font-size:11.5px">'+r.days+'</td>',lot:r=>'<td class="desc" style="font-size:11.5px">'+r.lot+'</td>',uStd:r=>'<td class="num">'+fmtU(r.uStd)+'</td>',uAct:r=>'<td class="num">'+fmtU(r.uAct)+'</td>',qty:r=>'<td class="num">'+fmt(r.qty)+'</td>',thC:r=>'<td class="num">'+fmtC(r.thC)+'</td>',actC:r=>'<td class="num">'+fmtC(r.actC)+'</td>',varC:r=>'<td class="num"><b>'+fmtC(r.varC,true)+'</b></td>',pct:r=>'<td class="num">'+fmtP(r.pct)+'</td>'};
   document.getElementById('fgTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'fg\',\''+k+'\')">'+h+(fgSort.k===k?'<span class="arrow">'+(fgSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
     rows.map(r=>'<tr>'+cols.map(([k])=>cell[k](r)).join('')+'</tr>').join('');
@@ -488,18 +561,32 @@ function drawRM(){
   const s=document.getElementById('rmStatus').value;
   let rows=RM.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||r.used.toLowerCase().includes(q))&&(!s||r.status===s));
   rows.sort((x,y)=> rmSort.k? rmSort.d*((x[rmSort.k]??-Infinity)>(y[rmSort.k]??-Infinity)?1:-1) : (RM_ORDER[x.status]-RM_ORDER[y.status])||Math.abs(y.devC)-Math.abs(x.devC));
-  const colsAll=[['comp','Component'],['desc','Description'],['unit','Unit Cost'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['actJ','JI+BI Issues'],['actIA','Adjustments (IA)'],['act','Total Actual'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
-  const colsSimple=[['comp','Component'],['desc','Description'],['th','Theoretical (BOM)'],['act','Actual Used'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status']];
+  const colsAll=[['comp','Component'],['desc','Description'],['days','Consumption Days'],['unit','Unit Cost'],['used','Used In (Finished Goods)'],['th','Theoretical (BOM)'],['thC','Theoretical Cost'],['actJ','JI+BI Issues'],['actIA','Adjustments (IA)'],['act','Total Actual'],['actC','Actual Cost'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  const colsSimple=[['comp','Component'],['desc','Description'],['days','Consumption Days'],['th','Theoretical (BOM)'],['act','Actual Used'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status']];
   const cols=viewMode==='simple'?colsSimple:colsAll;
-  const cell={comp:r=>'<td><b>'+r.comp+'</b></td>',desc:r=>'<td class="desc">'+r.desc+'</td>',unit:r=>'<td class="num">'+fmtU(r.unit)+'</td>',used:r=>'<td class="desc" style="font-size:11.5px">'+r.used+'</td>',th:r=>'<td class="num">'+fmt(r.th)+'</td>',thC:r=>'<td class="num">'+fmtC(r.thC)+'</td>',actJ:r=>'<td class="num">'+fmt(r.actJ)+'</td>',actIA:r=>'<td class="num">'+fmtS(r.actIA)+'</td>',act:r=>'<td class="num"><b>'+fmt(r.act)+'</b></td>',actC:r=>'<td class="num">'+fmtC(r.actC)+'</td>',dev:r=>'<td class="num"><b>'+fmtS(r.dev)+'</b></td>',devC:r=>'<td class="num"><b>'+fmtC(r.devC,true)+'</b></td>',pct:r=>'<td class="num">'+fmtP(r.pct)+'</td>',status:r=>'<td>'+pill(r.status)+'</td>',cm:r=>'<td class="cmt">'+r.cm+'</td>'};
+  const cell={comp:r=>'<td><b>'+r.comp+'</b></td>',desc:r=>'<td class="desc">'+r.desc+'</td>',days:r=>'<td class="desc" style="font-size:11.5px">'+r.days+'</td>',unit:r=>'<td class="num">'+fmtU(r.unit)+'</td>',used:r=>'<td class="desc" style="font-size:11.5px">'+r.used+'</td>',th:r=>'<td class="num">'+fmt(r.th)+'</td>',thC:r=>'<td class="num">'+fmtC(r.thC)+'</td>',actJ:r=>'<td class="num">'+fmt(r.actJ)+'</td>',actIA:r=>'<td class="num">'+fmtS(r.actIA)+'</td>',act:r=>'<td class="num"><b>'+fmt(r.act)+'</b></td>',actC:r=>'<td class="num">'+fmtC(r.actC)+'</td>',dev:r=>'<td class="num"><b>'+fmtS(r.dev)+'</b></td>',devC:r=>'<td class="num"><b>'+fmtC(r.devC,true)+'</b></td>',pct:r=>'<td class="num">'+fmtP(r.pct)+'</td>',status:r=>'<td>'+pill(r.status)+'</td>',cm:r=>'<td class="cmt">'+r.cm+'</td>'};
   document.getElementById('rmTable').innerHTML=
     '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'rm\',\''+k+'\')">'+h+(rmSort.k===k?'<span class="arrow">'+(rmSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
     rows.map(r=>'<tr>'+cols.map(([k])=>cell[k](r)).join('')+'</tr>').join('');
   document.getElementById('rmCount').textContent=rows.length+' of '+RM.length+' components';
 }
-function sortT(t,k){ const s=t==='fg'?fgSort:rmSort; if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():drawRM(); }
+function drawBT(){
+  const q=(document.getElementById('btSearch').value||'').toLowerCase();
+  let rows=BT.filter(r=>(!q||r.comp.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)));
+  rows.sort((x,y)=> btSort.k? btSort.d*((x[btSort.k]??-Infinity)>(y[btSort.k]??-Infinity)?1:-1) : Math.abs(y.devC)-Math.abs(x.devC));
+  const colsAll=[['comp','Batch'],['desc','Description'],['days','Days'],['unit','Unit Cost'],['prod','Produced (Net)'],['th','Theoretical Demand (BOM)'],['act','Actual Consumed'],['dev','Deviation'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status'],['cm','Comment']];
+  const colsSimple=[['comp','Batch'],['desc','Description'],['days','Days'],['prod','Produced (Net)'],['th','Theoretical Demand'],['act','Actual Consumed'],['devC','Deviation Cost'],['pct','Deviation %'],['status','Status']];
+  const cols=viewMode==='simple'?colsSimple:colsAll;
+  const cell={comp:r=>'<td><b>'+r.comp+'</b></td>',desc:r=>'<td class="desc">'+r.desc+'</td>',days:r=>'<td class="desc" style="font-size:11.5px">'+r.days+'</td>',unit:r=>'<td class="num">'+fmtU(r.unit)+'</td>',prod:r=>'<td class="num">'+fmt(r.prod)+'</td>',th:r=>'<td class="num">'+fmt(r.th)+'</td>',act:r=>'<td class="num"><b>'+fmt(r.act)+'</b></td>',dev:r=>'<td class="num">'+fmtS(r.dev)+'</td>',devC:r=>'<td class="num"><b>'+fmtC(r.devC,true)+'</b></td>',pct:r=>'<td class="num">'+fmtP(r.pct)+'</td>',status:r=>'<td>'+pill(r.status)+'</td>',cm:r=>'<td class="cmt">'+r.cm+'</td>'};
+  document.getElementById('btTable').innerHTML=
+    '<tr>'+cols.map(([k,h])=>'<th onclick="sortT(\'bt\',\''+k+'\')">'+h+(btSort.k===k?'<span class="arrow">'+(btSort.d>0?'▲':'▼')+'</span>':'')+'</th>').join('')+'</tr>'+
+    rows.map(r=>'<tr>'+cols.map(([k])=>cell[k](r)).join('')+'</tr>').join('');
+  document.getElementById('btCount').textContent=rows.length+' of '+BT.length+' batches';
+}
+function sortT(t,k){ const s=t==='fg'?fgSort:(t==='bt'?btSort:rmSort); if(s.k===k) s.d*=-1; else {s.k=k; s.d=1;} t==='fg'?drawFG():(t==='bt'?drawBT():drawRM()); }
 ['fgSearch','fgCat'].forEach(id=>document.getElementById(id).addEventListener('input',drawFG));
 ['rmSearch','rmStatus'].forEach(id=>document.getElementById(id).addEventListener('input',drawRM));
+document.getElementById('btSearch').addEventListener('input',drawBT);
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
@@ -535,16 +622,20 @@ document.getElementById('btnXlsx').addEventListener('click',()=>{
     ['Production = Sage JR+BR. Consumption = JI+BI. Theoretical = production x BOM (no scrap). Costs from CI_Item LastTotalUnitCost; finished-good standard cost = multi-level BOM roll-up.'],
     ['FG Actual Cost = each component\'s real consumption allocated to the finished goods that required it, with batch over-consumption flowing through to the goods that use the batch.'],
   ];
-  const fgSheet=[['Item','Description','Category','Lot / Work Ticket(s)','Std Unit Cost (BOM)','Actual Unit Cost','Sage Net (JR+BR+IA)','Theoretical Cost','Actual Cost (Materials)','Cost Variance','Var %'],
-    ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC)).map(r=>[r.item,r.desc,r.cat,r.lot,r.uStd,r.uAct,r.qty,r.thC,r.actC,r.varC,r.pct])];
-  const rmSheet=[['Component','Description','Unit Cost','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','JI+BI Issues','Adjustments (IA)','Total Actual','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
-    ...RM.map(r=>[r.comp,r.desc,r.unit,r.used,r.th,r.thC,r.actJ,r.actIA,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
+  const fgSheet=[['Item','Description','Category','Production Days','Lot / Work Ticket(s)','Std Unit Cost (BOM)','Actual Unit Cost','Sage Net (JR+BR+IA)','Theoretical Cost','Actual Cost (Materials)','Cost Variance','Var %'],
+    ...[...FG].sort((x,y)=>(CAT_ORDER[x.cat]-CAT_ORDER[y.cat])||(y.thC-x.thC)).map(r=>[r.item,r.desc,r.cat,r.days,r.lot,r.uStd,r.uAct,r.qty,r.thC,r.actC,r.varC,r.pct])];
+  const rmSheet=[['Component','Description','Consumption Days','Unit Cost','Used In (Finished Goods)','Theoretical (BOM)','Theoretical Cost','JI+BI Issues','Adjustments (IA)','Total Actual','Actual Cost','Deviation','Deviation Cost','Deviation %','Status','Comment'],
+    ...RM.map(r=>[r.comp,r.desc,r.days,r.unit,r.used,r.th,r.thC,r.actJ,r.actIA,r.act,r.actC,r.dev,r.devC,r.pct,r.status,r.cm])];
   const wb=XLSX.utils.book_new();
   const s1=XLSX.utils.aoa_to_sheet(summary); s1['!cols']=[{wch:60},{wch:14}];
   const s2=XLSX.utils.aoa_to_sheet(fgSheet); s2['!cols']=[12,32,16,34,15,15,16,16,20,14,9].map(w=>({wch:w}));
   const s3=XLSX.utils.aoa_to_sheet(rmSheet); s3['!cols']=[14,32,11,40,16,15,13,14,13,13,12,14,11,14,64].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s1,'Summary');
+  const btSheet=[['Batch','Description','Days','Unit Cost','Produced (Net)','Theoretical Demand (BOM)','Actual Consumed','Deviation','Deviation Cost','Deviation %','Status','Comment'],
+    ...BT.map(r=>[r.comp,r.desc,r.days,r.unit,r.prod,r.th,r.act,r.dev,r.devC,r.pct,r.status,r.cm])];
+  const s4=XLSX.utils.aoa_to_sheet(btSheet); s4['!cols']=[16,32,11,14,20,15,12,14,11,14,60].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,s2,'Finished Goods');
+  XLSX.utils.book_append_sheet(wb,s4,'Batches');
   XLSX.utils.book_append_sheet(wb,s3,'Raw Materials');
   XLSX.writeFile(wb,'Sage_Production_Material_Report'+(selDay==='ALL'?'':'_'+selDay)+'.xlsx');
 });
